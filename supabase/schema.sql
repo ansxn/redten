@@ -208,3 +208,67 @@ CREATE POLICY "Users can add friends" ON public.friends
 
 CREATE POLICY "Users can remove own friends" ON public.friends
   FOR DELETE USING (auth.uid() = user_id);
+
+-- ========================================
+-- GROUPS SYSTEM
+-- ========================================
+
+-- Groups table
+CREATE TABLE IF NOT EXISTS public.groups (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  description TEXT,
+  invite_code TEXT UNIQUE NOT NULL,
+  created_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Group members
+CREATE TABLE IF NOT EXISTS public.group_members (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  group_id UUID REFERENCES public.groups(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+  joined_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(group_id, user_id)
+);
+
+-- Enable RLS
+ALTER TABLE public.groups ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.group_members ENABLE ROW LEVEL SECURITY;
+
+-- Policies for groups
+CREATE POLICY "Anyone can view groups" ON public.groups
+  FOR SELECT USING (true);
+
+CREATE POLICY "Users can create groups" ON public.groups
+  FOR INSERT WITH CHECK (auth.uid() = created_by);
+
+CREATE POLICY "Creators can update groups" ON public.groups
+  FOR UPDATE USING (auth.uid() = created_by);
+
+-- Policies for group members
+CREATE POLICY "Members viewable" ON public.group_members
+  FOR SELECT USING (true);
+
+CREATE POLICY "Users can join groups" ON public.group_members
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can leave groups" ON public.group_members
+  FOR DELETE USING (auth.uid() = user_id);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_group_members_group ON public.group_members(group_id);
+CREATE INDEX IF NOT EXISTS idx_group_members_user ON public.group_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_groups_invite_code ON public.groups(invite_code);
+
+-- Update user_stats RLS to allow viewing group members' stats
+DROP POLICY IF EXISTS "Users can view own stats" ON public.user_stats;
+CREATE POLICY "Users can view stats in their groups" ON public.user_stats
+  FOR SELECT USING (
+    auth.uid() = user_id
+    OR EXISTS (
+      SELECT 1 FROM public.group_members gm1
+      JOIN public.group_members gm2 ON gm1.group_id = gm2.group_id
+      WHERE gm1.user_id = auth.uid() AND gm2.user_id = user_stats.user_id
+    )
+  );

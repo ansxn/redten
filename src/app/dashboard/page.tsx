@@ -47,6 +47,9 @@ export default function Dashboard() {
                         </p>
                     </div>
                     <div className="btn-group-mobile">
+                        <Link href="/groups" className="btn btn-secondary">
+                            Groups
+                        </Link>
                         <Link href="/friends" className="btn btn-secondary">
                             Friends
                         </Link>
