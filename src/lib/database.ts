@@ -1,0 +1,317 @@
+/**
+ * Supabase Database Service
+ * Handles all database operations for sessions, rounds, and stats
+ */
+
+import { createClient } from './supabase';
+import { Session, SessionPlayer, Round, UserStats, NewRoundData, generateId } from '@/types';
+import { calculateRoundScores, applyRoundScores } from './scoring';
+
+const supabase = createClient();
+
+// ============ USER STATS ============
+
+export async function getUserStats(userId: string): Promise<UserStats | null> {
+    if (!supabase) return null;
+
+    const { data, error } = await supabase
+        .from('user_stats')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+    if (error) {
+        console.error('Error fetching user stats:', error);
+        return null;
+    }
+
+    return data ? {
+        user_id: data.user_id,
+        total_rounds_played: data.total_rounds_played,
+        rounds_won: data.rounds_won,
+        lifetime_earnings: parseFloat(data.lifetime_earnings),
+        sessions_played: data.sessions_played,
+        best_session: parseFloat(data.best_session),
+        worst_session: parseFloat(data.worst_session),
+    } : null;
+}
+
+export async function updateUserStats(userId: string, updates: Partial<UserStats>): Promise<void> {
+    if (!supabase) return;
+
+    const { error } = await supabase
+        .from('user_stats')
+        .update({
+            ...updates,
+            updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId);
+
+    if (error) {
+        console.error('Error updating user stats:', error);
+    }
+}
+
+// ============ SESSIONS ============
+
+export async function createSession(
+    userId: string,
+    name: string | undefined,
+    pointValue: number,
+    players: { username: string; isGuest: boolean; avatarColor: string; userId?: string }[]
+): Promise<Session | null> {
+    if (!supabase) return null;
+
+    // Create session
+    const { data: sessionData, error: sessionError } = await supabase
+        .from('sessions')
+        .insert({
+            created_by: userId,
+            name,
+            point_value: pointValue,
+            status: 'active'
+        })
+        .select()
+        .single();
+
+    if (sessionError || !sessionData) {
+        console.error('Error creating session:', sessionError);
+        return null;
+    }
+
+    // Add players - link real user IDs for stat tracking
+    const playerInserts = players.map(p => ({
+        session_id: sessionData.id,
+        user_id: p.isGuest ? null : (p.userId || null),  // Link real user ID if not guest
+        username: p.username,
+        is_guest: p.isGuest,
+        avatar_color: p.avatarColor,
+        session_score: 0
+    }));
+
+    const { data: playersData, error: playersError } = await supabase
+        .from('session_players')
+        .insert(playerInserts)
+        .select();
+
+    if (playersError) {
+        console.error('Error adding players:', playersError);
+        return null;
+    }
+
+    // Convert to our Session type
+    const sessionPlayers: SessionPlayer[] = playersData.map(p => ({
+        user_id: p.id, // Use the session_player id as user_id for this session
+        username: p.username,
+        session_score: parseFloat(p.session_score),
+        is_guest: p.is_guest,
+        avatar_color: p.avatar_color
+    }));
+
+    return {
+        id: sessionData.id,
+        created_at: sessionData.created_at,
+        created_by: sessionData.created_by,
+        players: sessionPlayers,
+        rounds: [],
+        status: sessionData.status,
+        point_value: parseFloat(sessionData.point_value),
+        name: sessionData.name
+    };
+}
+
+export async function getSession(sessionId: string): Promise<Session | null> {
+    if (!supabase) return null;
+
+    // Fetch session
+    const { data: sessionData, error: sessionError } = await supabase
+        .from('sessions')
+        .select('*')
+        .eq('id', sessionId)
+        .single();
+
+    if (sessionError || !sessionData) {
+        console.error('Error fetching session:', sessionError);
+        return null;
+    }
+
+    // Fetch players
+    const { data: playersData, error: playersError } = await supabase
+        .from('session_players')
+        .select('*')
+        .eq('session_id', sessionId);
+
+    if (playersError) {
+        console.error('Error fetching players:', playersError);
+        return null;
+    }
+
+    // Fetch rounds
+    const { data: roundsData, error: roundsError } = await supabase
+        .from('rounds')
+        .select(`
+      *,
+      round_red_team(player_id),
+      round_points(player_id, points)
+    `)
+        .eq('session_id', sessionId)
+        .order('round_number', { ascending: true });
+
+    if (roundsError) {
+        console.error('Error fetching rounds:', roundsError);
+        return null;
+    }
+
+    // Convert to our types
+    const sessionPlayers: SessionPlayer[] = playersData.map(p => ({
+        user_id: p.id,
+        username: p.username,
+        session_score: parseFloat(p.session_score),
+        is_guest: p.is_guest,
+        avatar_color: p.avatar_color
+    }));
+
+    const rounds: Round[] = (roundsData || []).map(r => ({
+        id: r.id,
+        round_number: r.round_number,
+        multiplier: r.multiplier as 1 | 2 | 4,
+        red_team_player_ids: r.round_red_team?.map((rt: { player_id: string }) => rt.player_id) || [],
+        result: r.result as 'red_win' | 'blue_win' | 'wash',
+        points_awarded: Object.fromEntries(
+            (r.round_points || []).map((rp: { player_id: string; points: string }) => [rp.player_id, parseFloat(rp.points)])
+        ),
+        created_at: r.created_at
+    }));
+
+    return {
+        id: sessionData.id,
+        created_at: sessionData.created_at,
+        created_by: sessionData.created_by,
+        players: sessionPlayers,
+        rounds,
+        status: sessionData.status,
+        point_value: parseFloat(sessionData.point_value),
+        name: sessionData.name
+    };
+}
+
+export async function getUserSessions(userId: string): Promise<Session[]> {
+    if (!supabase) return [];
+
+    // Get sessions where user is creator
+    const { data: sessionsData, error } = await supabase
+        .from('sessions')
+        .select(`
+      *,
+      session_players(*)
+    `)
+        .eq('created_by', userId)
+        .order('created_at', { ascending: false });
+
+    if (error || !sessionsData) {
+        console.error('Error fetching user sessions:', error);
+        return [];
+    }
+
+    return sessionsData.map(s => ({
+        id: s.id,
+        created_at: s.created_at,
+        created_by: s.created_by,
+        players: s.session_players.map((p: Record<string, unknown>) => ({
+            user_id: p.id as string,
+            username: p.username as string,
+            session_score: parseFloat(p.session_score as string),
+            is_guest: p.is_guest as boolean,
+            avatar_color: p.avatar_color as string
+        })),
+        rounds: [], // Don't load all rounds for list view
+        status: s.status,
+        point_value: parseFloat(s.point_value),
+        name: s.name
+    }));
+}
+
+export async function addRound(
+    sessionId: string,
+    roundData: NewRoundData,
+    players: SessionPlayer[]
+): Promise<{ round: Round; updatedPlayers: SessionPlayer[] } | null> {
+    if (!supabase) return null;
+
+    // Calculate scores
+    const scores = calculateRoundScores(roundData, players);
+    const updatedPlayers = applyRoundScores(players, scores);
+
+    // Get current round count
+    const { count } = await supabase
+        .from('rounds')
+        .select('*', { count: 'exact', head: true })
+        .eq('session_id', sessionId);
+
+    const roundNumber = (count || 0) + 1;
+
+    // Create round
+    const { data: roundDbData, error: roundError } = await supabase
+        .from('rounds')
+        .insert({
+            session_id: sessionId,
+            round_number: roundNumber,
+            multiplier: roundData.multiplier,
+            result: roundData.result
+        })
+        .select()
+        .single();
+
+    if (roundError || !roundDbData) {
+        console.error('Error creating round:', roundError);
+        return null;
+    }
+
+    // Add red team
+    if (roundData.red_team_player_ids.length > 0) {
+        const redTeamInserts = roundData.red_team_player_ids.map(playerId => ({
+            round_id: roundDbData.id,
+            player_id: playerId
+        }));
+
+        await supabase.from('round_red_team').insert(redTeamInserts);
+    }
+
+    // Add points
+    const pointsInserts = Object.entries(scores).map(([playerId, points]) => ({
+        round_id: roundDbData.id,
+        player_id: playerId,
+        points
+    }));
+
+    await supabase.from('round_points').insert(pointsInserts);
+
+    // Update player scores
+    for (const player of updatedPlayers) {
+        await supabase
+            .from('session_players')
+            .update({ session_score: player.session_score })
+            .eq('id', player.user_id);
+    }
+
+    const round: Round = {
+        id: roundDbData.id,
+        round_number: roundNumber,
+        multiplier: roundData.multiplier,
+        red_team_player_ids: roundData.red_team_player_ids,
+        result: roundData.result,
+        points_awarded: scores,
+        created_at: roundDbData.created_at
+    };
+
+    return { round, updatedPlayers };
+}
+
+export async function endSession(sessionId: string): Promise<void> {
+    if (!supabase) return;
+
+    await supabase
+        .from('sessions')
+        .update({ status: 'completed', updated_at: new Date().toISOString() })
+        .eq('id', sessionId);
+}

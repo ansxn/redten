@@ -1,0 +1,605 @@
+@import "tailwindcss";
+
+/* ========================================
+   RED 10 SCORE TRACKER - BALATRO THEME
+   ======================================== */
+
+:root {
+  /* Core Colors - Balatro inspired dark theme */
+  --bg-primary: #1a1625;
+  --bg-secondary: #252036;
+  --bg-panel: #2d2640;
+  --bg-card: #3a3154;
+
+  /* Accent Colors */
+  --accent-red: #e74c4c;
+  --accent-red-glow: #ff6b6b;
+  --accent-gold: #f4c430;
+  --accent-gold-glow: #ffd93d;
+  --accent-green: #4ade80;
+  --accent-blue: #60a5fa;
+  --accent-purple: #a855f7;
+
+  /* Text Colors */
+  --text-primary: #f8f4ff;
+  --text-secondary: #b8a8d4;
+  --text-muted: #6b5f7d;
+
+  /* Border & Effects */
+  --border-color: #4a3d6a;
+  --border-glow: rgba(168, 85, 247, 0.5);
+  --shadow-glow: 0 0 20px rgba(231, 76, 76, 0.3);
+
+  /* Spacing */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+}
+
+@theme inline {
+  --color-background: var(--bg-primary);
+  --color-foreground: var(--text-primary);
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Inter', system-ui, sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Animated background pattern like Balatro */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background:
+    radial-gradient(ellipse at 20% 20%, rgba(168, 85, 247, 0.1) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 80%, rgba(231, 76, 76, 0.1) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 50%, rgba(244, 196, 48, 0.05) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: -1;
+  animation: bgPulse 8s ease-in-out infinite;
+}
+
+@keyframes bgPulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* ========================================
+   TYPOGRAPHY
+   ======================================== */
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.text-glow {
+  text-shadow: 0 0 10px currentColor, 0 0 20px currentColor;
+}
+
+.text-title {
+  font-size: 2.5rem;
+  background: linear-gradient(135deg, var(--accent-gold) 0%, var(--accent-red) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ========================================
+   PANEL COMPONENT
+   ======================================== */
+
+.panel {
+  background: var(--bg-panel);
+  border: 3px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 4px 20px rgba(0, 0, 0, 0.4);
+  position: relative;
+  overflow: hidden;
+}
+
+.panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+}
+
+.panel-header {
+  background: var(--bg-secondary);
+  border: 3px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1.25rem;
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  font-weight: 700;
+  font-size: 0.875rem;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+}
+
+/* ========================================
+   BUTTON COMPONENTS
+   ======================================== */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1.5rem;
+  font-weight: 700;
+  font-size: 1rem;
+  border: 2px solid;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-decoration: none;
+  transition: background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+}
+
+.btn:hover {
+  opacity: 0.9;
+}
+
+.btn:active {
+  opacity: 0.8;
+}
+
+.btn-primary {
+  background: var(--accent-red);
+  border-color: var(--accent-red);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #d43c3c;
+  border-color: #d43c3c;
+}
+
+.btn-secondary {
+  background: var(--bg-card);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-panel);
+  border-color: var(--accent-purple);
+}
+
+.btn-gold {
+  background: var(--accent-gold);
+  border-color: var(--accent-gold);
+  color: #1a1625;
+}
+
+.btn-gold:hover {
+  background: #e0b420;
+  border-color: #e0b420;
+}
+
+.btn-green {
+  background: var(--accent-green);
+  border-color: var(--accent-green);
+  color: #1a1625;
+}
+
+.btn-green:hover {
+  background: #3bce70;
+  border-color: #3bce70;
+}
+
+.btn-call {
+  background: var(--accent-blue);
+  border-color: var(--accent-blue);
+  color: white;
+}
+
+.btn-call:hover {
+  background: #4f96fa;
+  border-color: #4f96fa;
+}
+
+.btn-double {
+  background: var(--accent-purple);
+  border-color: var(--accent-purple);
+  color: white;
+}
+
+.btn-double:hover {
+  background: #9645f7;
+  border-color: #9645f7;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ========================================
+   INPUT COMPONENTS
+   ======================================== */
+
+.input {
+  width: 100%;
+  padding: 0.875rem 1rem;
+  background: var(--bg-secondary);
+  border: 3px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 1rem;
+  transition: all 0.2s ease;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--accent-purple);
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.3);
+}
+
+.input::placeholder {
+  color: var(--text-muted);
+}
+
+.label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ========================================
+   PLAYER CARD COMPONENT
+   ======================================== */
+
+.player-card {
+  background: var(--bg-card);
+  border: 3px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.player-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+}
+
+.player-card.selected {
+  border-color: var(--accent-red);
+  box-shadow:
+    0 0 20px rgba(231, 76, 76, 0.4),
+    inset 0 0 30px rgba(231, 76, 76, 0.1);
+}
+
+.player-card.red-team {
+  border-color: var(--accent-red);
+  background: linear-gradient(135deg, var(--bg-card) 0%, rgba(231, 76, 76, 0.2) 100%);
+}
+
+.player-card.blue-team {
+  border-color: var(--accent-blue);
+  background: linear-gradient(135deg, var(--bg-card) 0%, rgba(96, 165, 250, 0.2) 100%);
+}
+
+.player-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-purple) 0%, var(--accent-red) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.25rem;
+  color: white;
+  text-transform: uppercase;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+.player-score {
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.player-score.positive {
+  color: var(--accent-green);
+}
+
+.player-score.negative {
+  color: var(--accent-red);
+}
+
+.player-score.neutral {
+  color: var(--text-secondary);
+}
+
+/* ========================================
+   SCORE DISPLAY
+   ======================================== */
+
+.score-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.75rem;
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.multiplier-badge {
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  font-size: 1.25rem;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.multiplier-badge.x2 {
+  background: linear-gradient(135deg, var(--accent-blue) 0%, #3b82f6 100%);
+  color: white;
+  box-shadow: 0 0 20px rgba(96, 165, 250, 0.5);
+}
+
+.multiplier-badge.x4 {
+  background: linear-gradient(135deg, var(--accent-purple) 0%, #9333ea 100%);
+  color: white;
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.5);
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+/* ========================================
+   ROUND HISTORY
+   ======================================== */
+
+.round-item {
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.round-item:hover {
+  background: var(--bg-card);
+}
+
+.round-item.red-win {
+  border-left: 4px solid var(--accent-red);
+}
+
+.round-item.blue-win {
+  border-left: 4px solid var(--accent-blue);
+}
+
+.round-item.wash {
+  border-left: 4px solid var(--accent-gold);
+}
+
+/* ========================================
+   PAYOUT DISPLAY
+   ======================================== */
+
+.payout-arrow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.payout-arrow .arrow {
+  color: var(--accent-gold);
+  font-size: 1.5rem;
+}
+
+.payout-amount {
+  font-size: 1.25rem;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--accent-green);
+}
+
+/* ========================================
+   STATS DISPLAY
+   ======================================== */
+
+.stat-card {
+  background: var(--bg-card);
+  border: 3px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  margin-bottom: 0.25rem;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+
+/* ========================================
+   ANIMATIONS
+   ======================================== */
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scoreChange {
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.2);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.4s ease-out;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-score {
+  animation: scoreChange 0.4s ease-out;
+}
+
+/* ========================================
+   CARD FLIP EFFECT
+   ======================================== */
+
+.card-3d {
+  perspective: 1000px;
+}
+
+.card-inner {
+  transition: transform 0.6s;
+  transform-style: preserve-3d;
+}
+
+.card-3d:hover .card-inner {
+  transform: rotateY(5deg) rotateX(5deg);
+}
+
+/* ========================================
+   UTILITY CLASSES
+   ======================================== */
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.grid-players {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gap-sm {
+  gap: 0.5rem;
+}
+
+.gap-md {
+  gap: 1rem;
+}
+
+.gap-lg {
+  gap: 1.5rem;
+}
+
+.mb-sm {
+  margin-bottom: 0.5rem;
+}
+
+.mb-md {
+  margin-bottom: 1rem;
+}
+
+.mb-lg {
+  margin-bottom: 1.5rem;
+}
+
+.mb-xl {
+  margin-bottom: 2rem;
+}
