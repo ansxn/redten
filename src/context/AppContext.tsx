@@ -50,7 +50,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const loadSessions = async () => {
         if (user && supabase && !isGuestMode) {
             const cloudSessions = await db.getUserSessions(user.id);
-            setSessions(cloudSessions);
+
+            // Merge with existing sessions to preserve loaded rounds
+            setSessions(prev => {
+                return cloudSessions.map(cloudSession => {
+                    const existing = prev.find(p => p.id === cloudSession.id);
+                    // If we have an existing session with rounds, and the new one has none (list view),
+                    // keep the existing rounds
+                    if (existing && existing.rounds.length > 0 && cloudSession.rounds.length === 0) {
+                        return { ...cloudSession, rounds: existing.rounds };
+                    }
+                    return cloudSession;
+                });
+            });
         } else if (typeof window !== 'undefined') {
             const stored = localStorage.getItem(SESSIONS_STORAGE_KEY);
             if (stored) {
