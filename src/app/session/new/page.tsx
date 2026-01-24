@@ -7,6 +7,7 @@ import { Session, SessionPlayer, generateId, getRandomAvatarColor } from '@/type
 import { getFriends, searchUsers, addFriend, Friend, UserProfile } from '@/lib/friends';
 import * as db from '@/lib/database';
 import Link from 'next/link';
+import Avatar from '@/components/Avatar';
 
 interface SelectedPlayer {
     id: string;
@@ -273,17 +274,13 @@ export default function NewSession() {
                             <div key={player.id} className="player-card">
                                 <div className="flex justify-between items-center">
                                     <div className="flex items-center gap-sm">
-                                        <div
-                                            className="player-avatar"
-                                            style={{
-                                                width: 36,
-                                                height: 36,
-                                                fontSize: '0.875rem',
-                                                background: player.avatarColor
-                                            }}
-                                        >
-                                            {player.username.charAt(0)}
-                                        </div>
+                                        <Avatar
+                                            userId={player.userId}
+                                            username={player.username}
+                                            avatarColor={player.avatarColor}
+                                            size={36}
+                                            fontSize="0.875rem"
+                                        />
                                         <div>
                                             <div className="font-bold">{player.username}</div>
                                             <div style={{
@@ -365,17 +362,13 @@ export default function NewSession() {
                                         style={{ cursor: 'pointer' }}
                                     >
                                         <div className="flex items-center gap-sm">
-                                            <div
-                                                className="player-avatar"
-                                                style={{
-                                                    width: 36,
-                                                    height: 36,
-                                                    fontSize: '0.875rem',
-                                                    background: result.avatar_color || '#a855f7'
-                                                }}
-                                            >
-                                                {result.username.charAt(0)}
-                                            </div>
+                                            <Avatar
+                                                userId={result.id}
+                                                username={result.username}
+                                                avatarColor={result.avatar_color || '#a855f7'}
+                                                size={36}
+                                                fontSize="0.875rem"
+                                            />
                                             <span className="font-bold">{result.username}</span>
                                             {friends.some(f => f.id === result.id) && (
                                                 <span style={{ color: 'var(--accent-gold)', fontSize: '0.75rem' }}>★ Friend</span>

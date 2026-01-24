@@ -185,6 +185,22 @@ export default function Profile() {
                         </div>
 
                         <div className="stat-card">
+                            <div className="stat-value" style={{ color: 'var(--accent-gold)' }}>
+                                {userStats?.first_places || 0}
+                            </div>
+                            <div className="stat-label">First Places</div>
+                        </div>
+
+                        <div className="stat-card">
+                            <div className="stat-value" style={{ color: 'var(--text-secondary)' }}>
+                                {userStats && userStats.total_rounds_played > 0
+                                    ? ((userStats.total_placement_sum || 0) / userStats.total_rounds_played).toFixed(1)
+                                    : '-'}
+                            </div>
+                            <div className="stat-label">Avg Placement</div>
+                        </div>
+
+                        <div className="stat-card">
                             <div className="stat-value" style={{ color: 'var(--accent-green)' }}>
                                 {formatMoney(userStats?.best_session || 0)}
                             </div>
@@ -202,7 +218,7 @@ export default function Profile() {
 
                 {/* Session History */}
                 <section className="panel animate-slide-up" style={{ animationDelay: '0.1s' }}>
-                    <div className="panel-header">Session History ({userStats?.sessions_played || 0})</div>
+                    <div className="panel-header">Session History ({completedSessions.length})</div>
 
                     {completedSessions.length === 0 ? (
                         <p style={{ color: 'var(--text-muted)' }}>No completed sessions yet</p>

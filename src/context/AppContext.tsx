@@ -110,14 +110,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
             if (!user) return;
 
             if (supabase && !isGuestMode) {
-                const cloudStats = await db.getUserStats(user.id);
-                if (cloudStats) {
-                    setUserStats(cloudStats);
-                    return;
-                }
+                // Use getOrCreateUserStats to ensure stats row exists
+                const cloudStats = await db.getOrCreateUserStats(user.id);
+                setUserStats(cloudStats);
+                return;
             }
 
-            // Fallback to localStorage
+            // Fallback to localStorage for guest mode
             if (typeof window !== 'undefined') {
                 const stored = localStorage.getItem(`${STATS_STORAGE_KEY}_${user.id}`);
                 if (stored) {
@@ -144,13 +143,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         loadStats();
     }, [user, isGuestMode]);
 
-    // Save stats
+    // Save stats - ONLY for guest mode (cloud stats are managed by database triggers)
     useEffect(() => {
         if (!userStats || !user) return;
 
-        if (supabase && !isGuestMode) {
-            db.updateUserStats(user.id, userStats);
-        } else if (typeof window !== 'undefined') {
+        // Only save to localStorage for guest mode
+        // Cloud stats are now managed by database triggers, do NOT write from client
+        if (isGuestMode && typeof window !== 'undefined') {
             localStorage.setItem(`${STATS_STORAGE_KEY}_${user.id}`, JSON.stringify(userStats));
         }
     }, [userStats, user, isGuestMode]);

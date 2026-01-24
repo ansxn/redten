@@ -16,6 +16,8 @@ export interface UserStats {
   sessions_played: number;
   best_session: number;
   worst_session: number;
+  first_places?: number;  // Number of times finished 1st
+  total_placement_sum?: number;  // Sum of all placements (for calculating average)
 }
 
 export interface Session {

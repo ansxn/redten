@@ -8,6 +8,7 @@ import { calculateRoundScores, applyRoundScores, formatPoints, formatMoney, calc
 import { calculateOptimalPayouts, getFinalStandings } from '@/lib/payout';
 import * as db from '@/lib/database';
 import Link from 'next/link';
+import Avatar from '@/components/Avatar';
 
 type GamePhase = 'lobby' | 'teams' | 'finish_order' | 'results' | 'payout';
 
@@ -211,11 +212,16 @@ export default function SessionPage() {
     };
 
     const handleWash = async () => {
-        // Wash = no points change, just record the round
+        // Wash = no points change, but still record placements
+        if (finishOrder.length !== 6) {
+            alert('Please select all 6 player placements before recording the wash.');
+            return;
+        }
+
         const roundData: NewRoundData = {
             multiplier,
             red_team_player_ids: selectedRedPlayers,
-            finish_order: [],
+            finish_order: finishOrder,  // Use actual finish order instead of empty
             result: 'wash'
         };
 
@@ -242,7 +248,7 @@ export default function SessionPage() {
             round_number: session.rounds.length + 1,
             multiplier,
             red_team_player_ids: selectedRedPlayers,
-            finish_order: [],
+            finish_order: finishOrder,  // Use actual finish order
             result: 'wash',
             points_awarded: {},
             created_at: new Date().toISOString()
@@ -317,12 +323,10 @@ export default function SessionPage() {
                                             <div className="flex items-center gap-3">
                                                 {player.is_guest ? (
                                                     <>
-                                                        <div
-                                                            className="player-avatar"
-                                                            style={{ background: player.avatar_color }}
-                                                        >
-                                                            {player.username.charAt(0)}
-                                                        </div>
+                                                        <Avatar
+                                                            username={player.username}
+                                                            avatarColor={player.avatar_color}
+                                                        />
                                                         <div>
                                                             <div className="font-bold">{player.username}</div>
                                                             <div className={`player-score ${player.session_score > 0 ? 'positive' :
@@ -334,12 +338,11 @@ export default function SessionPage() {
                                                     </>
                                                 ) : (
                                                     <Link href={`/profile/${player.user_id}`} className="flex items-center gap-3 w-full hover:opacity-80 transition-opacity">
-                                                        <div
-                                                            className="player-avatar"
-                                                            style={{ background: player.avatar_color }}
-                                                        >
-                                                            {player.username.charAt(0)}
-                                                        </div>
+                                                        <Avatar
+                                                            userId={player.user_id}
+                                                            username={player.username}
+                                                            avatarColor={player.avatar_color}
+                                                        />
                                                         <div>
                                                             <div className="font-bold underline decoration-dotted underline-offset-4">{player.username}</div>
                                                             <div className={`player-score ${player.session_score > 0 ? 'positive' :

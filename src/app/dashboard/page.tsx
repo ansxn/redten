@@ -95,7 +95,7 @@ export default function Dashboard() {
                         </div>
                         <div className="stat-card">
                             <div className="stat-value" style={{ color: 'var(--accent-blue)' }}>
-                                {userStats?.sessions_played || 0}
+                                {completedSessions.length}
                             </div>
                             <div className="stat-label">Sessions</div>
                         </div>

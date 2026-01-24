@@ -21,7 +21,10 @@ export async function getUserStats(userId: string): Promise<UserStats | null> {
         .single();
 
     if (error) {
-        console.error('Error fetching user stats:', error);
+        // PGRST116 means no rows found - not a real error
+        if (error.code !== 'PGRST116') {
+            console.error('Error fetching user stats:', error);
+        }
         return null;
     }
 
@@ -33,7 +36,45 @@ export async function getUserStats(userId: string): Promise<UserStats | null> {
         sessions_played: data.sessions_played,
         best_session: parseFloat(data.best_session),
         worst_session: parseFloat(data.worst_session),
+        first_places: data.first_places || 0,
+        total_placement_sum: data.total_placement_sum || 0,
     } : null;
+}
+
+// Get existing stats or create a new row with defaults
+export async function getOrCreateUserStats(userId: string): Promise<UserStats> {
+    const existing = await getUserStats(userId);
+    if (existing) return existing;
+
+    // Create new stats row - only if one doesn't exist
+    const defaultStats: UserStats = {
+        user_id: userId,
+        total_rounds_played: 0,
+        rounds_won: 0,
+        lifetime_earnings: 0,
+        sessions_played: 0,
+        best_session: 0,
+        worst_session: 0,
+    };
+
+    if (supabase) {
+        // Use upsert with onConflict: 'ignore' to avoid overwriting existing data
+        await supabase.from('user_stats').upsert({
+            user_id: userId,
+            total_rounds_played: 0,
+            rounds_won: 0,
+            lifetime_earnings: 0,
+            sessions_played: 0,
+            best_session: 0,
+            worst_session: 0
+        }, { onConflict: 'user_id', ignoreDuplicates: true });
+
+        // After insert/upsert, fetch the actual data (which may have existing values)
+        const actualStats = await getUserStats(userId);
+        if (actualStats) return actualStats;
+    }
+
+    return defaultStats;
 }
 
 export async function updateUserStats(userId: string, updates: Partial<UserStats>): Promise<void> {
@@ -222,14 +263,23 @@ export async function getSession(sessionId: string): Promise<Session | null> {
 export async function getUserSessions(userId: string): Promise<Session[]> {
     if (!supabase) return [];
 
-    // Get sessions where user is creator
+    // First, get session IDs where user is a participant (via session_players.user_id)
+    const { data: participantSessions } = await supabase
+        .from('session_players')
+        .select('session_id')
+        .eq('user_id', userId);
+
+    const participantSessionIds = participantSessions?.map(p => p.session_id) || [];
+
+    // Get sessions where user is creator OR participant
     const { data: sessionsData, error } = await supabase
         .from('sessions')
         .select(`
       *,
-      session_players(*)
+      session_players(*),
+      rounds(id)
     `)
-        .eq('created_by', userId)
+        .or(`created_by.eq.${userId},id.in.(${participantSessionIds.join(',')})`)
         .order('created_at', { ascending: false });
 
     if (error || !sessionsData) {
@@ -242,13 +292,13 @@ export async function getUserSessions(userId: string): Promise<Session[]> {
         created_at: s.created_at,
         created_by: s.created_by,
         players: s.session_players.map((p: Record<string, unknown>) => ({
-            user_id: p.id as string,
+            user_id: (p.user_id as string) || (p.id as string), // Use actual user_id, fallback to row id for guests
             username: p.username as string,
             session_score: parseFloat(p.session_score as string),
             is_guest: p.is_guest as boolean,
             avatar_color: p.avatar_color as string
         })),
-        rounds: [], // Don't load all rounds for list view
+        rounds: (s.rounds || []).map((r: { id: string }) => ({ id: r.id })) as unknown as Round[], // Just IDs for count
         status: s.status,
         point_value: parseFloat(s.point_value),
         name: s.name
@@ -337,12 +387,35 @@ export async function addRound(
         const pointsForPlayer = scores[player.user_id] || 0;
         const won = pointsForPlayer > 0;
 
-        // Get current stats
+        // Calculate placement (1-6 based on finish_order, 0 if not found)
+        const finishOrder = roundData.finish_order || [];
+        const placementIndex = finishOrder.indexOf(player.user_id);
+        const placement = placementIndex >= 0 ? placementIndex + 1 : 0;
+        const gotFirst = placement === 1;
+
+        // Get current stats or create defaults
         const currentStats = await getUserStats(sessionPlayer.user_id);
+
         if (currentStats) {
+            // Update existing stats with placement tracking
             await updateUserStats(sessionPlayer.user_id, {
                 total_rounds_played: currentStats.total_rounds_played + 1,
-                rounds_won: currentStats.rounds_won + (won ? 1 : 0)
+                rounds_won: currentStats.rounds_won + (won ? 1 : 0),
+                first_places: (currentStats.first_places || 0) + (gotFirst ? 1 : 0),
+                total_placement_sum: (currentStats.total_placement_sum || 0) + placement
+            });
+        } else {
+            // Create new stats row via upsert
+            await supabase.from('user_stats').upsert({
+                user_id: sessionPlayer.user_id,
+                total_rounds_played: 1,
+                rounds_won: won ? 1 : 0,
+                lifetime_earnings: 0,
+                sessions_played: 0,
+                best_session: 0,
+                worst_session: 0,
+                first_places: gotFirst ? 1 : 0,
+                total_placement_sum: placement
             });
         }
     }
