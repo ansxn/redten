@@ -321,6 +321,32 @@ export async function addRound(
             .eq('id', player.user_id);
     }
 
+    // Update user_stats for each registered player in the round
+    for (const player of players) {
+        if (player.is_guest) continue;
+
+        // Get the actual user_id from session_players table
+        const { data: sessionPlayer } = await supabase
+            .from('session_players')
+            .select('user_id')
+            .eq('id', player.user_id)
+            .single();
+
+        if (!sessionPlayer?.user_id) continue;
+
+        const pointsForPlayer = scores[player.user_id] || 0;
+        const won = pointsForPlayer > 0;
+
+        // Get current stats
+        const currentStats = await getUserStats(sessionPlayer.user_id);
+        if (currentStats) {
+            await updateUserStats(sessionPlayer.user_id, {
+                total_rounds_played: currentStats.total_rounds_played + 1,
+                rounds_won: currentStats.rounds_won + (won ? 1 : 0)
+            });
+        }
+    }
+
     const round: Round = {
         id: roundDbData.id,
         round_number: roundNumber,

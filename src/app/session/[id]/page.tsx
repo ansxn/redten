@@ -161,13 +161,11 @@ export default function SessionPage() {
                     setLastRoundScores(dbResult.round.points_awarded);
                     setPhase('results');
 
-                    // Update user stats
-                    const userScore = dbResult.round.points_awarded[user.id];
-                    if (userScore !== undefined) {
-                        updateStats({
-                            total_rounds_played: (userStats?.total_rounds_played || 0) + 1,
-                            rounds_won: (userStats?.rounds_won || 0) + (userScore > 0 ? 1 : 0)
-                        });
+                    // Stats are now updated in the database by addRound
+                    // Reload stats from database to reflect changes
+                    const updatedStats = await db.getUserStats(user.id);
+                    if (updatedStats) {
+                        updateStats(updatedStats);
                     }
                     return;
                 }
