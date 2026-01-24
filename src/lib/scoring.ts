@@ -1,28 +1,29 @@
 /**
  * Scoring Logic for Red 10
  * 
- * Rules based on FINISHING ORDER:
- * - 6 players total, teams vary by who holds Red 10s
- * - Points calculated by how many consecutive positions the winning team holds
+ * Rules based on FINISHING ORDER (first out = winner):
+ * 
+ * Winning team = team with first person out
+ * Wash = someone in the winning team gets out last (no points change)
  * 
  * 3 vs 3 scenarios:
- * - 1 point: Winner gets 1st place only
- * - 2 points: Winner gets 1st AND 2nd place
- * - 2 points: Loser gets 6th AND 5th (last two)
- * - 3 points: Winner gets 1st, 2nd, AND 3rd
+ * - Points = number of losing team members left when last winning team member gets out
+ * - Then apply multipliers (1x, 2x, 4x)
  * 
- * 4 vs 2:
- * - 4 points: Winner gets 1st, 2nd, 3rd, AND 4th
+ * 2 Red Ten vs 4 Regulars:
+ * - Red tens 1st & 2nd: winners gain 8, losers lose 4
+ * - Red tens 1st & (3rd/4th/5th): winners gain 4, losers lose 2
+ * - Regulars 1st/2nd/3rd/4th: regulars gain 4, red tens lose 8
+ * - Regulars win any other way: regulars gain 2, red tens lose 4
  * 
- * 5 vs 1:
- * - 5 points: Winner gets 1st, 2nd, 3rd, 4th, AND 5th
+ * 1 Red Ten vs 5 Regulars:
+ * - Red ten 1st: red ten gains 25, everyone else loses 5
+ * - Red ten last (6th): red ten loses 25, everyone else gains 5
  * 
- * Multipliers:
+ * Multipliers (only for 3v3):
  * - Normal: 1x
  * - Call: 2x
  * - Double Call: 4x
- * 
- * Wash: No points change (tie)
  */
 
 import { SessionPlayer, NewRoundData } from '@/types';
@@ -30,41 +31,112 @@ import { SessionPlayer, NewRoundData } from '@/types';
 export interface FinishOrderRoundData {
     multiplier: 1 | 2 | 4;
     red_team_player_ids: string[];
-    finish_order: string[];  // Player IDs in order from 1st to 6th
+    finish_order: string[];  // Player IDs in order from 1st to 6th (1st = first out = winner)
     result: 'red_win' | 'blue_win' | 'wash';
 }
 
 /**
- * Calculate points based on finish order
- * Points = how many consecutive top positions the winning team holds
+ * Determine if a round is a wash
+ * Wash = winning team member (team of 1st place) gets out last
  */
-export function calculatePointsFromFinishOrder(
-    finishOrder: string[],
-    winningTeamIds: string[]
-): number {
-    let points = 0;
+export function isWash(finishOrder: string[], winningTeamIds: string[]): boolean {
+    if (finishOrder.length === 0) return false;
+    const lastPlayerId = finishOrder[finishOrder.length - 1];
+    return winningTeamIds.includes(lastPlayerId);
+}
 
-    // Count consecutive wins from the front (1st, 2nd, 3rd...)
+/**
+ * Calculate points for 3v3 scenario
+ * Points = number of losing team members left when last winning team member gets out
+ */
+export function calculate3v3Points(
+    finishOrder: string[],
+    winningTeamIds: string[],
+    losingTeamIds: string[]
+): number {
+    // Find when the last winning team member got out
+    let lastWinnerPosition = -1;
     for (let i = 0; i < finishOrder.length; i++) {
         if (winningTeamIds.includes(finishOrder[i])) {
-            points++;
-        } else {
-            break;  // Stop at first non-winner
+            lastWinnerPosition = i;
         }
     }
 
-    // Also check consecutive losses from the back (6th, 5th, 4th...)
-    let backPoints = 0;
-    for (let i = finishOrder.length - 1; i >= 0; i--) {
-        if (!winningTeamIds.includes(finishOrder[i])) {
-            backPoints++;
+    if (lastWinnerPosition === -1) return 0;
+
+    // Count how many losing team members haven't gotten out yet at that point
+    const losersOutByThen = finishOrder.slice(0, lastWinnerPosition + 1)
+        .filter(id => losingTeamIds.includes(id)).length;
+
+    const losersRemaining = losingTeamIds.length - losersOutByThen;
+
+    return losersRemaining;
+}
+
+/**
+ * Calculate points for 2 Red Ten vs 4 Regulars
+ */
+export function calculate2v4Points(
+    finishOrder: string[],
+    redTenIds: string[],
+    regularIds: string[]
+): { redTenPoints: number; regularPoints: number } {
+    const firstPlace = finishOrder[0];
+    const secondPlace = finishOrder[1];
+    const thirdPlace = finishOrder[2];
+    const fourthPlace = finishOrder[3];
+    const fifthPlace = finishOrder[4];
+
+    const isRedTenFirst = redTenIds.includes(firstPlace);
+
+    if (isRedTenFirst) {
+        // Red tens win
+        const isRedTenSecond = redTenIds.includes(secondPlace);
+
+        if (isRedTenSecond) {
+            // Red tens 1st and 2nd: winners gain 8, losers lose 4
+            return { redTenPoints: 8, regularPoints: -4 };
         } else {
-            break;
+            // Red tens 1st and (3rd/4th/5th): winners gain 4, losers lose 2
+            return { redTenPoints: 4, regularPoints: -2 };
+        }
+    } else {
+        // Regulars win
+        const isRegularSecond = regularIds.includes(secondPlace);
+        const isRegularThird = regularIds.includes(thirdPlace);
+        const isRegularFourth = regularIds.includes(fourthPlace);
+
+        if (isRegularSecond && isRegularThird && isRegularFourth) {
+            // Regulars 1st, 2nd, 3rd, 4th: regulars gain 4, red tens lose 8
+            return { redTenPoints: -8, regularPoints: 4 };
+        } else {
+            // Regulars win any other way: regulars gain 2, red tens lose 4
+            return { redTenPoints: -4, regularPoints: 2 };
         }
     }
+}
 
-    // Take the higher of the two (front-loaded wins OR back-loaded losses)
-    return Math.max(points, backPoints);
+/**
+ * Calculate points for 1 Red Ten vs 5 Regulars
+ */
+export function calculate1v5Points(
+    finishOrder: string[],
+    redTenId: string
+): { redTenPoints: number; regularPoints: number } {
+    const firstPlace = finishOrder[0];
+    const lastPlace = finishOrder[finishOrder.length - 1];
+
+    if (firstPlace === redTenId) {
+        // Red ten is first: red ten gains 25, everyone else loses 5
+        return { redTenPoints: 25, regularPoints: -5 };
+    } else if (lastPlace === redTenId) {
+        // Red ten is last: red ten loses 25, everyone else gains 5
+        return { redTenPoints: -25, regularPoints: 5 };
+    } else {
+        // Red ten is somewhere in the middle (2nd, 3rd, 4th, 5th)
+        // Rule: Wash (no points change)
+        return { redTenPoints: 0, regularPoints: 0 };
+    }
 }
 
 /**
@@ -77,7 +149,7 @@ export function calculateRoundScores(
     roundData: NewRoundData | FinishOrderRoundData,
     players: SessionPlayer[]
 ): Record<string, number> {
-    const { multiplier, red_team_player_ids, result } = roundData;
+    const { multiplier, red_team_player_ids } = roundData;
 
     // Initialize all scores to 0
     const scores: Record<string, number> = {};
@@ -85,45 +157,101 @@ export function calculateRoundScores(
         scores[p.user_id] = 0;
     });
 
-    // If wash, no points change
-    if (result === 'wash') {
+    // Need finish order to calculate
+    if (!('finish_order' in roundData) || !roundData.finish_order || roundData.finish_order.length === 0) {
         return scores;
     }
+
+    const finishOrder = roundData.finish_order;
 
     // Divide players into teams
-    const redTeam = players.filter(p => red_team_player_ids.includes(p.user_id));
-    const blueTeam = players.filter(p => !red_team_player_ids.includes(p.user_id));
+    const redTeamIds = red_team_player_ids;
+    const blueTeamIds = players
+        .map(p => p.user_id)
+        .filter(id => !redTeamIds.includes(id));
 
-    // Determine winners and losers
-    const winners = result === 'red_win' ? redTeam : blueTeam;
-    const losers = result === 'red_win' ? blueTeam : redTeam;
+    const redTeamSize = redTeamIds.length;
+    const blueTeamSize = blueTeamIds.length;
 
-    if (losers.length === 0 || winners.length === 0) {
+    // Determine winning team based on who got out first
+    const firstOutId = finishOrder[0];
+    const redWins = redTeamIds.includes(firstOutId);
+
+    const winningTeamIds = redWins ? redTeamIds : blueTeamIds;
+    const losingTeamIds = redWins ? blueTeamIds : redTeamIds;
+
+    // Check for wash (winning team member gets out last)
+    if (isWash(finishOrder, winningTeamIds)) {
+        // Wash = no points change
         return scores;
     }
 
-    // Check if we have finish order data
-    let basePoints = 1;
-    if ('finish_order' in roundData && roundData.finish_order && roundData.finish_order.length > 0) {
-        const winningTeamIds = winners.map(w => w.user_id);
-        basePoints = calculatePointsFromFinishOrder(roundData.finish_order, winningTeamIds);
+    // Handle different team compositions
+    if (redTeamSize === 3 && blueTeamSize === 3) {
+        // 3v3 scenario
+        const basePoints = calculate3v3Points(finishOrder, winningTeamIds, losingTeamIds);
+        const totalPoints = basePoints * multiplier;
+
+        // Winners gain points, losers lose points
+        winningTeamIds.forEach(id => {
+            scores[id] = totalPoints;
+        });
+        losingTeamIds.forEach(id => {
+            scores[id] = -totalPoints;
+        });
+
+    } else if (redTeamSize === 2 && blueTeamSize === 4) {
+        // 2 Red Ten vs 4 Regulars
+        const { redTenPoints, regularPoints } = calculate2v4Points(finishOrder, redTeamIds, blueTeamIds);
+
+        // Apply multiplier
+        const finalRedTenPoints = redTenPoints * multiplier;
+        const finalRegularPoints = regularPoints * multiplier;
+
+        redTeamIds.forEach(id => {
+            scores[id] = finalRedTenPoints;
+        });
+        blueTeamIds.forEach(id => {
+            scores[id] = finalRegularPoints;
+        });
+
+    } else if (redTeamSize === 4 && blueTeamSize === 2) {
+        // 4 Regulars vs 2 Red Ten (inverted)
+        const { redTenPoints, regularPoints } = calculate2v4Points(finishOrder, blueTeamIds, redTeamIds);
+
+        // Apply multiplier
+        const finalRedTenPoints = redTenPoints * multiplier;
+        const finalRegularPoints = regularPoints * multiplier;
+
+        blueTeamIds.forEach(id => {
+            scores[id] = finalRedTenPoints;
+        });
+        redTeamIds.forEach(id => {
+            scores[id] = finalRegularPoints;
+        });
+
+    } else if (redTeamSize === 1 && blueTeamSize === 5) {
+        // 1 Red Ten vs 5 Regulars
+        const redTenId = redTeamIds[0];
+        const { redTenPoints, regularPoints } = calculate1v5Points(finishOrder, redTenId);
+
+        // Note: Multiplier may or may not apply to 1v5 (not specified)
+        // Applying it based on the pattern
+        scores[redTenId] = redTenPoints * multiplier;
+        blueTeamIds.forEach(id => {
+            scores[id] = regularPoints * multiplier;
+        });
+
+    } else if (redTeamSize === 5 && blueTeamSize === 1) {
+        // 5 Regulars vs 1 Red Ten (inverted)
+        const redTenId = blueTeamIds[0];
+        const { redTenPoints, regularPoints } = calculate1v5Points(finishOrder, redTenId);
+
+        scores[redTenId] = redTenPoints * multiplier;
+        redTeamIds.forEach(id => {
+            scores[id] = regularPoints * multiplier;
+        });
     }
-
-    // Apply multiplier
-    const pointsPerLoser = basePoints * multiplier;
-
-    // Total points lost = pointsPerLoser * number of losers
-    // Total points won = same amount, split among winners
-    const totalLost = pointsPerLoser * losers.length;
-    const winningsPerWinner = totalLost / winners.length;
-
-    losers.forEach(player => {
-        scores[player.user_id] = -pointsPerLoser;
-    });
-
-    winners.forEach(player => {
-        scores[player.user_id] = winningsPerWinner;
-    });
 
     return scores;
 }
@@ -168,4 +296,77 @@ export function formatMoney(amount: number): string {
         currency: 'USD'
     });
     return amount < 0 ? `-${formatted}` : formatted;
+}
+
+/**
+ * Calculate points preview for UI (base points before multiplier)
+ * Works for all team compositions
+ */
+export function calculatePointsPreview(
+    finishOrder: string[],
+    redTeamIds: string[],
+    allPlayerIds: string[]
+): number {
+    if (finishOrder.length !== 6) return 0;
+
+    const blueTeamIds = allPlayerIds.filter(id => !redTeamIds.includes(id));
+    const redTeamSize = redTeamIds.length;
+    const blueTeamSize = blueTeamIds.length;
+
+    // Determine winning team based on who got out first
+    const firstOutId = finishOrder[0];
+    const redWins = redTeamIds.includes(firstOutId);
+
+    const winningTeamIds = redWins ? redTeamIds : blueTeamIds;
+    const losingTeamIds = redWins ? blueTeamIds : redTeamIds;
+
+    // Check for wash
+    if (isWash(finishOrder, winningTeamIds)) {
+        return 0;
+    }
+
+    // 3v3
+    if (redTeamSize === 3 && blueTeamSize === 3) {
+        return calculate3v3Points(finishOrder, winningTeamIds, losingTeamIds);
+    }
+
+    // 2v4 or 4v2
+    if ((redTeamSize === 2 && blueTeamSize === 4) || (redTeamSize === 4 && blueTeamSize === 2)) {
+        const redTenIds = redTeamSize === 2 ? redTeamIds : blueTeamIds;
+        const regularIds = redTeamSize === 2 ? blueTeamIds : redTeamIds;
+        const { redTenPoints } = calculate2v4Points(finishOrder, redTenIds, regularIds);
+        return Math.abs(redTenPoints);
+    }
+
+    // 1v5 or 5v1
+    if ((redTeamSize === 1 && blueTeamSize === 5) || (redTeamSize === 5 && blueTeamSize === 1)) {
+        const redTenId = redTeamSize === 1 ? redTeamIds[0] : blueTeamIds[0];
+        const { redTenPoints } = calculate1v5Points(finishOrder, redTenId);
+        return Math.abs(redTenPoints);
+    }
+
+    return 0;
+}
+
+/**
+ * Determine the result based on finish order
+ * Winner = team of the first person out
+ */
+export function determineResult(
+    finishOrder: string[],
+    redTeamIds: string[]
+): 'red_win' | 'blue_win' | 'wash' {
+    if (finishOrder.length === 0) return 'wash';
+
+    const firstOutId = finishOrder[0];
+    const redWins = redTeamIds.includes(firstOutId);
+
+    const winningTeamIds = redWins ? redTeamIds : finishOrder.filter(id => !redTeamIds.includes(id));
+
+    // Check for wash
+    if (isWash(finishOrder, winningTeamIds)) {
+        return 'wash';
+    }
+
+    return redWins ? 'red_win' : 'blue_win';
 }

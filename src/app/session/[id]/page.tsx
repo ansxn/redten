@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { useRouter, useParams } from 'next/navigation';
 import { Round, generateId, NewRoundData } from '@/types';
-import { calculateRoundScores, applyRoundScores, formatPoints, formatMoney, calculatePointsFromFinishOrder } from '@/lib/scoring';
+import { calculateRoundScores, applyRoundScores, formatPoints, formatMoney, calculatePointsPreview } from '@/lib/scoring';
 import { calculateOptimalPayouts, getFinalStandings } from '@/lib/payout';
 import * as db from '@/lib/database';
 import Link from 'next/link';
@@ -123,17 +123,10 @@ export default function SessionPage() {
     };
 
     // Calculate points preview based on current finish order
-    const calculatePointsPreview = (): number => {
+    const getPointsPreview = (): number => {
         if (finishOrder.length !== 6) return 0;
-
-        const result = determineWinner();
-        if (!result) return 0;
-
-        const winningTeamIds = result === 'red_win'
-            ? selectedRedPlayers
-            : session.players.filter(p => !selectedRedPlayers.includes(p.user_id)).map(p => p.user_id);
-
-        return calculatePointsFromFinishOrder(finishOrder, winningTeamIds);
+        const allPlayerIds = session.players.map(p => p.user_id);
+        return calculatePointsPreview(finishOrder, selectedRedPlayers, allPlayerIds);
     };
 
     const completeRound = async () => {
@@ -278,7 +271,7 @@ export default function SessionPage() {
     const standings = getFinalStandings(session.players, session.point_value);
 
     const winner = determineWinner();
-    const pointsPreview = calculatePointsPreview();
+    const pointsPreview = getPointsPreview();
 
     return (
         <main className="min-h-screen p-4 md:p-8">
