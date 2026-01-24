@@ -93,15 +93,15 @@ export default function FriendsPage() {
     if (!user) return null;
 
     return (
-        <main className="min-h-screen p-8">
+        <main className="min-h-screen p-4 md:p-8">
             <div className="container max-w-2xl">
                 {/* Header */}
-                <header className="mb-8">
+                <header className="mb-6 md:mb-8">
                     <Link href="/dashboard" className="btn btn-secondary mb-4">
                         ← Back
                     </Link>
-                    <h1 className="text-title text-4xl">Friends</h1>
-                    <p style={{ color: 'var(--text-secondary)' }}>
+                    <h1 className="text-title text-2xl md:text-4xl">Friends</h1>
+                    <p style={{ color: 'var(--text-secondary)' }} className="text-sm md:text-base">
                         Add friends to easily invite them to game sessions
                     </p>
                 </header>
@@ -127,7 +127,7 @@ export default function FriendsPage() {
                 <section className="panel mb-6 animate-slide-up">
                     <div className="panel-header">Add Friend</div>
 
-                    <div className="flex gap-sm mb-4">
+                    <div className="flex flex-col sm:flex-row gap-sm mb-4">
                         <input
                             type="text"
                             className="input flex-1"

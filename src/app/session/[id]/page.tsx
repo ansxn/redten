@@ -4,12 +4,12 @@ import { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { useRouter, useParams } from 'next/navigation';
 import { Round, generateId, NewRoundData } from '@/types';
-import { calculateRoundScores, applyRoundScores, formatPoints, formatMoney } from '@/lib/scoring';
+import { calculateRoundScores, applyRoundScores, formatPoints, formatMoney, calculatePointsFromFinishOrder } from '@/lib/scoring';
 import { calculateOptimalPayouts, getFinalStandings } from '@/lib/payout';
 import * as db from '@/lib/database';
 import Link from 'next/link';
 
-type GamePhase = 'lobby' | 'round' | 'results' | 'payout';
+type GamePhase = 'lobby' | 'teams' | 'finish_order' | 'results' | 'payout';
 
 export default function SessionPage() {
     const params = useParams();
@@ -23,7 +23,7 @@ export default function SessionPage() {
     const [phase, setPhase] = useState<GamePhase>('lobby');
     const [multiplier, setMultiplier] = useState<1 | 2 | 4>(1);
     const [selectedRedPlayers, setSelectedRedPlayers] = useState<string[]>([]);
-    const [roundResult, setRoundResult] = useState<'red_win' | 'blue_win' | 'wash' | null>(null);
+    const [finishOrder, setFinishOrder] = useState<string[]>([]);
     const [lastRoundScores, setLastRoundScores] = useState<Record<string, number>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -79,10 +79,10 @@ export default function SessionPage() {
     };
 
     const startNewRound = () => {
-        setPhase('round');
+        setPhase('teams');
         setMultiplier(1);
         setSelectedRedPlayers([]);
-        setRoundResult(null);
+        setFinishOrder([]);
     };
 
     const handleCall = () => {
@@ -93,33 +93,83 @@ export default function SessionPage() {
         if (multiplier === 2) setMultiplier(4);
     };
 
+    const proceedToFinishOrder = () => {
+        if (selectedRedPlayers.length === 0) return;
+        setFinishOrder([]);
+        setPhase('finish_order');
+    };
+
+    const addToFinishOrder = (playerId: string) => {
+        if (finishOrder.includes(playerId)) return;
+        setFinishOrder([...finishOrder, playerId]);
+    };
+
+    const removeFromFinishOrder = (playerId: string) => {
+        setFinishOrder(finishOrder.filter(id => id !== playerId));
+    };
+
+    const getFinishPosition = (playerId: string): number | null => {
+        const index = finishOrder.indexOf(playerId);
+        return index >= 0 ? index + 1 : null;
+    };
+
+    // Determine winner based on finish order
+    const determineWinner = (): 'red_win' | 'blue_win' | null => {
+        if (finishOrder.length !== 6) return null;
+
+        // First place determines winner
+        const firstPlace = finishOrder[0];
+        return selectedRedPlayers.includes(firstPlace) ? 'red_win' : 'blue_win';
+    };
+
+    // Calculate points preview based on current finish order
+    const calculatePointsPreview = (): number => {
+        if (finishOrder.length !== 6) return 0;
+
+        const result = determineWinner();
+        if (!result) return 0;
+
+        const winningTeamIds = result === 'red_win'
+            ? selectedRedPlayers
+            : session.players.filter(p => !selectedRedPlayers.includes(p.user_id)).map(p => p.user_id);
+
+        return calculatePointsFromFinishOrder(finishOrder, winningTeamIds);
+    };
+
     const completeRound = async () => {
-        if (!roundResult || selectedRedPlayers.length === 0) return;
+        if (finishOrder.length !== 6) return;
         setIsSubmitting(true);
+
+        const result = determineWinner();
+        if (!result) {
+            setIsSubmitting(false);
+            return;
+        }
 
         const roundData: NewRoundData = {
             multiplier,
             red_team_player_ids: selectedRedPlayers,
-            result: roundResult
+            finish_order: finishOrder,
+            result
         };
 
         try {
             // If authenticated, use cloud database
             if (!isGuestMode && user) {
-                const result = await db.addRound(sessionId, roundData, session.players);
-                if (result) {
+                const dbResult = await db.addRound(sessionId, roundData, session.players);
+                if (dbResult) {
                     const updatedSession = {
                         ...session,
-                        players: result.updatedPlayers,
-                        rounds: [...session.rounds, result.round]
+                        players: dbResult.updatedPlayers,
+                        rounds: [...session.rounds, dbResult.round]
                     };
                     updateSession(updatedSession);
                     setSession(updatedSession);
-                    setLastRoundScores(result.round.points_awarded);
+                    setLastRoundScores(dbResult.round.points_awarded);
                     setPhase('results');
 
                     // Update user stats
-                    const userScore = result.round.points_awarded[user.id];
+                    const userScore = dbResult.round.points_awarded[user.id];
                     if (userScore !== undefined) {
                         updateStats({
                             total_rounds_played: (userStats?.total_rounds_played || 0) + 1,
@@ -139,7 +189,8 @@ export default function SessionPage() {
                 round_number: session.rounds.length + 1,
                 multiplier,
                 red_team_player_ids: selectedRedPlayers,
-                result: roundResult,
+                finish_order: finishOrder,
+                result,
                 points_awarded: scores,
                 created_at: new Date().toISOString()
             };
@@ -166,6 +217,37 @@ export default function SessionPage() {
         } finally {
             setIsSubmitting(false);
         }
+    };
+
+    const handleWash = () => {
+        // Wash = no points change, just record the round
+        const roundData: NewRoundData = {
+            multiplier,
+            red_team_player_ids: selectedRedPlayers,
+            finish_order: [],
+            result: 'wash'
+        };
+
+        const newRound: Round = {
+            id: generateId(),
+            round_number: session.rounds.length + 1,
+            multiplier,
+            red_team_player_ids: selectedRedPlayers,
+            finish_order: [],
+            result: 'wash',
+            points_awarded: {},
+            created_at: new Date().toISOString()
+        };
+
+        const updatedSession = {
+            ...session,
+            rounds: [...session.rounds, newRound]
+        };
+
+        updateSession(updatedSession);
+        setSession(updatedSession);
+        setLastRoundScores({});
+        setPhase('results');
     };
 
     const handleEndSession = async () => {
@@ -195,6 +277,9 @@ export default function SessionPage() {
 
     const standings = getFinalStandings(session.players, session.point_value);
 
+    const winner = determineWinner();
+    const pointsPreview = calculatePointsPreview();
+
     return (
         <main className="min-h-screen p-4 md:p-8">
             <div className="container">
@@ -208,7 +293,7 @@ export default function SessionPage() {
                             {session.name || 'Game Session'}
                         </h1>
                         <p style={{ color: 'var(--text-secondary)' }}>
-                            Round {session.rounds.length + (phase === 'round' ? 1 : 0)} •
+                            Round {session.rounds.length + (phase === 'teams' || phase === 'finish_order' ? 1 : 0)} •
                             ${session.point_value}/point
                         </p>
                     </div>
@@ -244,7 +329,7 @@ export default function SessionPage() {
                                                 <div>
                                                     <div className="font-bold">{player.username}</div>
                                                     <div className={`player-score ${player.session_score > 0 ? 'positive' :
-                                                            player.session_score < 0 ? 'negative' : 'neutral'
+                                                        player.session_score < 0 ? 'negative' : 'neutral'
                                                         }`}>
                                                         {formatPoints(player.session_score)} pts
                                                     </div>
@@ -263,15 +348,15 @@ export default function SessionPage() {
                             </div>
                         )}
 
-                        {/* Round Phase */}
-                        {phase === 'round' && (
+                        {/* Teams Phase - Select Red 10 Holders */}
+                        {phase === 'teams' && (
                             <div className="panel animate-slide-up">
                                 <div className="panel-header">
-                                    Round {session.rounds.length + 1} • {session.players.length} pts at stake
+                                    Step 1: Select Red 10 Holders
                                 </div>
 
                                 {/* Multiplier Controls */}
-                                <div className="flex gap-md mb-6">
+                                <div className="flex gap-sm md:gap-md mb-6 flex-wrap">
                                     <button
                                         onClick={handleCall}
                                         disabled={multiplier >= 2}
@@ -284,26 +369,14 @@ export default function SessionPage() {
                                         disabled={multiplier !== 2}
                                         className={`btn flex-1 ${multiplier === 4 ? 'btn-double' : multiplier === 2 ? 'btn-double' : 'btn-secondary opacity-50'}`}
                                     >
-                                        {multiplier === 4 ? '✓ Double Called' : 'Double Call (4×)'}
+                                        {multiplier === 4 ? '✓ Double' : 'Double (4×)'}
                                     </button>
                                 </div>
-
-                                {/* Current Multiplier Display */}
-                                {multiplier > 1 && (
-                                    <div className="text-center mb-6">
-                                        <span className={`multiplier-badge ${multiplier === 2 ? 'x2' : 'x4'}`}>
-                                            {multiplier}× MULTIPLIER
-                                        </span>
-                                        <p className="mt-2" style={{ color: 'var(--text-muted)' }}>
-                                            {session.players.length * multiplier} points at stake
-                                        </p>
-                                    </div>
-                                )}
 
                                 {/* Red Team Selection */}
                                 <div className="mb-6">
                                     <h3 className="font-bold mb-3" style={{ color: 'var(--accent-red)' }}>
-                                        🔴 Select Red 10 Holders
+                                        🔴 Tap players holding Red 10s
                                     </h3>
                                     <div className="grid-players">
                                         {session.players.map(player => (
@@ -331,41 +404,139 @@ export default function SessionPage() {
                                     </div>
                                 </div>
 
-                                {/* Result Selection */}
-                                {selectedRedPlayers.length > 0 && (
-                                    <div className="mb-6 animate-fade-in">
-                                        <h3 className="font-bold mb-3">Result</h3>
-                                        <div className="flex gap-md flex-wrap">
-                                            <button
-                                                onClick={() => setRoundResult('red_win')}
-                                                className={`btn flex-1 ${roundResult === 'red_win' ? 'btn-primary' : 'btn-secondary'}`}
-                                            >
-                                                🔴 Red Wins
-                                            </button>
-                                            <button
-                                                onClick={() => setRoundResult('blue_win')}
-                                                className={`btn flex-1 ${roundResult === 'blue_win' ? 'btn-call' : 'btn-secondary'}`}
-                                            >
-                                                🔵 Blue Wins
-                                            </button>
-                                            <button
-                                                onClick={() => setRoundResult('wash')}
-                                                className={`btn flex-1 ${roundResult === 'wash' ? 'btn-gold' : 'btn-secondary'}`}
-                                            >
-                                                🟡 Wash
-                                            </button>
+                                <div className="flex gap-sm flex-wrap">
+                                    <button
+                                        onClick={() => setPhase('lobby')}
+                                        className="btn btn-secondary flex-1"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={proceedToFinishOrder}
+                                        disabled={selectedRedPlayers.length === 0}
+                                        className="btn btn-primary flex-1"
+                                    >
+                                        Next →
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Finish Order Phase */}
+                        {phase === 'finish_order' && (
+                            <div className="panel animate-slide-up">
+                                <div className="panel-header">
+                                    Step 2: Tap Players in Finish Order (1st → 6th)
+                                </div>
+
+                                {/* Current Finish Order Display */}
+                                <div className="mb-4 p-3 rounded-lg" style={{ background: 'var(--bg-secondary)' }}>
+                                    <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>
+                                        Finish Order ({finishOrder.length}/6):
+                                    </p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {finishOrder.map((playerId, index) => {
+                                            const player = session.players.find(p => p.user_id === playerId);
+                                            const isRed = selectedRedPlayers.includes(playerId);
+                                            return (
+                                                <button
+                                                    key={playerId}
+                                                    onClick={() => removeFromFinishOrder(playerId)}
+                                                    className="btn btn-secondary"
+                                                    style={{
+                                                        fontSize: '0.75rem',
+                                                        padding: '0.25rem 0.5rem',
+                                                        borderColor: isRed ? 'var(--accent-red)' : 'var(--accent-blue)'
+                                                    }}
+                                                >
+                                                    {index + 1}. {player?.username} ×
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* Player Selection */}
+                                <div className="mb-6">
+                                    <div className="grid-players">
+                                        {session.players.map(player => {
+                                            const position = getFinishPosition(player.user_id);
+                                            const isRed = selectedRedPlayers.includes(player.user_id);
+                                            const isSelected = position !== null;
+
+                                            return (
+                                                <div
+                                                    key={player.user_id}
+                                                    onClick={() => !isSelected && addToFinishOrder(player.user_id)}
+                                                    className={`player-card ${isRed ? 'red-team' : 'blue-team'} ${isSelected ? 'opacity-50' : ''}`}
+                                                    style={{ cursor: isSelected ? 'not-allowed' : 'pointer' }}
+                                                >
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-3">
+                                                            <div
+                                                                className="player-avatar"
+                                                                style={{
+                                                                    background: isRed ? 'var(--accent-red)' : 'var(--accent-blue)',
+                                                                    width: 36,
+                                                                    height: 36
+                                                                }}
+                                                            >
+                                                                {isRed ? '🔴' : '🔵'}
+                                                            </div>
+                                                            <span className="font-bold">{player.username}</span>
+                                                        </div>
+                                                        {position !== null && (
+                                                            <span className="font-bold" style={{
+                                                                color: 'var(--accent-gold)',
+                                                                fontSize: '1.25rem'
+                                                            }}>
+                                                                #{position}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* Points Preview */}
+                                {finishOrder.length === 6 && (
+                                    <div className="mb-4 p-4 rounded-lg text-center animate-fade-in" style={{
+                                        background: winner === 'red_win' ? 'rgba(231, 76, 76, 0.2)' : 'rgba(96, 165, 250, 0.2)'
+                                    }}>
+                                        <div className="text-lg mb-1" style={{
+                                            color: winner === 'red_win' ? 'var(--accent-red)' : 'var(--accent-blue)'
+                                        }}>
+                                            {winner === 'red_win' ? '🔴 Red Wins!' : '🔵 Blue Wins!'}
+                                        </div>
+                                        <div className="text-2xl font-bold" style={{ color: 'var(--accent-gold)' }}>
+                                            {pointsPreview * multiplier} points × ${session.point_value}
                                         </div>
                                     </div>
                                 )}
 
-                                {/* Complete Round Button */}
-                                <button
-                                    onClick={completeRound}
-                                    disabled={!roundResult || selectedRedPlayers.length === 0 || isSubmitting}
-                                    className="btn btn-green w-full text-xl py-4"
-                                >
-                                    {isSubmitting ? 'Saving...' : 'Complete Round'}
-                                </button>
+                                <div className="flex gap-sm flex-wrap">
+                                    <button
+                                        onClick={() => setPhase('teams')}
+                                        className="btn btn-secondary"
+                                    >
+                                        ← Back
+                                    </button>
+                                    <button
+                                        onClick={handleWash}
+                                        className="btn btn-gold"
+                                    >
+                                        🟡 Wash
+                                    </button>
+                                    <button
+                                        onClick={completeRound}
+                                        disabled={finishOrder.length !== 6 || isSubmitting}
+                                        className="btn btn-green flex-1"
+                                    >
+                                        {isSubmitting ? 'Saving...' : 'Complete Round'}
+                                    </button>
+                                </div>
                             </div>
                         )}
 
@@ -425,7 +596,7 @@ export default function SessionPage() {
                                                 <span>{item.player.username}</span>
                                             </div>
                                             <span className={`font-bold ${item.dollarAmount > 0 ? 'text-green-400' :
-                                                    item.dollarAmount < 0 ? 'text-red-400' : ''
+                                                item.dollarAmount < 0 ? 'text-red-400' : ''
                                                 }`}>
                                                 {formatMoney(item.dollarAmount)}
                                             </span>
@@ -436,7 +607,7 @@ export default function SessionPage() {
                                 {/* Transactions */}
                                 {payoutTransactions.length > 0 && (
                                     <div>
-                                        <h3 className="font-bold mb-3">Optimal Payments ({payoutTransactions.length} transactions)</h3>
+                                        <h3 className="font-bold mb-3">Optimal Payments ({payoutTransactions.length})</h3>
                                         {payoutTransactions.map((tx, index) => (
                                             <div key={index} className="payout-arrow mb-3">
                                                 <div className="flex-1">
@@ -479,7 +650,7 @@ export default function SessionPage() {
                                         <div
                                             key={round.id}
                                             className={`round-item ${round.result === 'red_win' ? 'red-win' :
-                                                    round.result === 'blue_win' ? 'blue-win' : 'wash'
+                                                round.result === 'blue_win' ? 'blue-win' : 'wash'
                                                 }`}
                                         >
                                             <div>
@@ -518,7 +689,7 @@ export default function SessionPage() {
                                         <div key={player.user_id} className="flex justify-between items-center">
                                             <span>{player.username}</span>
                                             <span className={`font-bold font-mono ${player.session_score > 0 ? 'text-green-400' :
-                                                    player.session_score < 0 ? 'text-red-400' : ''
+                                                player.session_score < 0 ? 'text-red-400' : ''
                                                 }`}>
                                                 {formatPoints(player.session_score)}
                                             </span>

@@ -1,34 +1,83 @@
 /**
  * Scoring Logic for Red 10
  * 
- * Rules:
- * - Each round has a base buy-in of 1 point per player
- * - "Called" doubles the stakes (2x)
- * - "Double Called" quadruples the stakes (4x)
- * - Red team: players holding Red 10s
- * - Blue team: players not holding Red 10s
- * - Red wins: someone on red team finishes first AND entire red team finishes before blue team
- * - Blue wins: blue team finishes first OR finishes before red team even if red had first out
- * - Wash: tie, all points return
+ * Rules based on FINISHING ORDER:
+ * - 6 players total, teams vary by who holds Red 10s
+ * - Points calculated by how many consecutive positions the winning team holds
+ * 
+ * 3 vs 3 scenarios:
+ * - 1 point: Winner gets 1st place only
+ * - 2 points: Winner gets 1st AND 2nd place
+ * - 2 points: Loser gets 6th AND 5th (last two)
+ * - 3 points: Winner gets 1st, 2nd, AND 3rd
+ * 
+ * 4 vs 2:
+ * - 4 points: Winner gets 1st, 2nd, 3rd, AND 4th
+ * 
+ * 5 vs 1:
+ * - 5 points: Winner gets 1st, 2nd, 3rd, 4th, AND 5th
+ * 
+ * Multipliers:
+ * - Normal: 1x
+ * - Call: 2x
+ * - Double Call: 4x
+ * 
+ * Wash: No points change (tie)
  */
 
-import { Round, SessionPlayer, NewRoundData } from '@/types';
+import { SessionPlayer, NewRoundData } from '@/types';
+
+export interface FinishOrderRoundData {
+    multiplier: 1 | 2 | 4;
+    red_team_player_ids: string[];
+    finish_order: string[];  // Player IDs in order from 1st to 6th
+    result: 'red_win' | 'blue_win' | 'wash';
+}
+
+/**
+ * Calculate points based on finish order
+ * Points = how many consecutive top positions the winning team holds
+ */
+export function calculatePointsFromFinishOrder(
+    finishOrder: string[],
+    winningTeamIds: string[]
+): number {
+    let points = 0;
+
+    // Count consecutive wins from the front (1st, 2nd, 3rd...)
+    for (let i = 0; i < finishOrder.length; i++) {
+        if (winningTeamIds.includes(finishOrder[i])) {
+            points++;
+        } else {
+            break;  // Stop at first non-winner
+        }
+    }
+
+    // Also check consecutive losses from the back (6th, 5th, 4th...)
+    let backPoints = 0;
+    for (let i = finishOrder.length - 1; i >= 0; i--) {
+        if (!winningTeamIds.includes(finishOrder[i])) {
+            backPoints++;
+        } else {
+            break;
+        }
+    }
+
+    // Take the higher of the two (front-loaded wins OR back-loaded losses)
+    return Math.max(points, backPoints);
+}
 
 /**
  * Calculate the points each player wins or loses in a round
- * @param roundData - The round configuration
+ * @param roundData - The round configuration with finish order
  * @param players - All players in the session
  * @returns Record of player_id -> points (positive = won, negative = lost)
  */
 export function calculateRoundScores(
-    roundData: NewRoundData,
+    roundData: NewRoundData | FinishOrderRoundData,
     players: SessionPlayer[]
 ): Record<string, number> {
     const { multiplier, red_team_player_ids, result } = roundData;
-
-    // Base buy-in is 1 point per person
-    const basePoints = 1;
-    const totalPoints = basePoints * multiplier;
 
     // Initialize all scores to 0
     const scores: Record<string, number> = {};
@@ -50,17 +99,26 @@ export function calculateRoundScores(
     const losers = result === 'red_win' ? blueTeam : redTeam;
 
     if (losers.length === 0 || winners.length === 0) {
-        // Edge case: everyone on same team (shouldn't happen but handle gracefully)
         return scores;
     }
 
-    // Each loser loses totalPoints
-    // Each winner gains (total lost by losers) / (number of winners)
-    const totalLost = totalPoints * losers.length;
+    // Check if we have finish order data
+    let basePoints = 1;
+    if ('finish_order' in roundData && roundData.finish_order && roundData.finish_order.length > 0) {
+        const winningTeamIds = winners.map(w => w.user_id);
+        basePoints = calculatePointsFromFinishOrder(roundData.finish_order, winningTeamIds);
+    }
+
+    // Apply multiplier
+    const pointsPerLoser = basePoints * multiplier;
+
+    // Total points lost = pointsPerLoser * number of losers
+    // Total points won = same amount, split among winners
+    const totalLost = pointsPerLoser * losers.length;
     const winningsPerWinner = totalLost / winners.length;
 
     losers.forEach(player => {
-        scores[player.user_id] = -totalPoints;
+        scores[player.user_id] = -pointsPerLoser;
     });
 
     winners.forEach(player => {
@@ -72,9 +130,6 @@ export function calculateRoundScores(
 
 /**
  * Apply round scores to update session player totals
- * @param players - Current session players
- * @param roundScores - Points from the round
- * @returns Updated players with new session_score
  */
 export function applyRoundScores(
     players: SessionPlayer[],
@@ -87,9 +142,10 @@ export function applyRoundScores(
 }
 
 /**
- * Get the total points at stake for a round
+ * Get the total points at stake for a round (before knowing finish order)
  */
 export function getPointsAtStake(multiplier: 1 | 2 | 4, playerCount: number): number {
+    // Max possible is if one team sweeps all positions
     return multiplier * playerCount;
 }
 

@@ -74,14 +74,14 @@ export default function Profile() {
     const completedSessions = sessions.filter(s => s.status === 'completed');
 
     return (
-        <main className="min-h-screen p-8">
+        <main className="min-h-screen p-4 md:p-8">
             <div className="container max-w-2xl">
                 {/* Header */}
-                <header className="mb-8">
+                <header className="mb-6 md:mb-8">
                     <Link href="/dashboard" className="btn btn-secondary mb-4">
                         ← Back
                     </Link>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3 md:gap-4">
                         {/* Avatar with upload */}
                         <div
                             onClick={handleAvatarClick}

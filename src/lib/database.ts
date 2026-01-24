@@ -176,6 +176,7 @@ export async function getSession(sessionId: string): Promise<Session | null> {
         round_number: r.round_number,
         multiplier: r.multiplier as 1 | 2 | 4,
         red_team_player_ids: r.round_red_team?.map((rt: { player_id: string }) => rt.player_id) || [],
+        finish_order: r.finish_order || [],
         result: r.result as 'red_win' | 'blue_win' | 'wash',
         points_awarded: Object.fromEntries(
             (r.round_points || []).map((rp: { player_id: string; points: string }) => [rp.player_id, parseFloat(rp.points)])
@@ -299,6 +300,7 @@ export async function addRound(
         round_number: roundNumber,
         multiplier: roundData.multiplier,
         red_team_player_ids: roundData.red_team_player_ids,
+        finish_order: roundData.finish_order || [],
         result: roundData.result,
         points_awarded: scores,
         created_at: roundDbData.created_at

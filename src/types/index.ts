@@ -42,8 +42,8 @@ export interface Round {
   round_number: number;
   multiplier: 1 | 2 | 4; // Base, Called (2x), Double Called (4x)
   red_team_player_ids: string[]; // Players holding Red 10s
+  finish_order: string[]; // Player IDs in order from 1st to 6th (who got out first)
   result: 'red_win' | 'blue_win' | 'wash';
-  players_left_count?: number; // How many players from losing team hadn't finished
   points_awarded: Record<string, number>; // player_id -> points gained/lost
   created_at: string;
 }
@@ -69,8 +69,8 @@ export interface NewSessionData {
 export interface NewRoundData {
   multiplier: 1 | 2 | 4;
   red_team_player_ids: string[];
+  finish_order: string[];  // Player IDs in order from 1st to 6th
   result: 'red_win' | 'blue_win' | 'wash';
-  players_left_count?: number;
 }
 
 // Avatar color options

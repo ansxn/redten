@@ -149,15 +149,29 @@ export default function NewSession() {
         setAddingFriendId(null);
     };
 
+    // Generate default session name from date/time
+    const getDefaultSessionName = (): string => {
+        const now = new Date();
+        return now.toLocaleDateString('en-US', {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit'
+        });
+    };
+
     const startSession = async () => {
         if (selectedPlayers.length !== 6 || !user) return;
         setIsCreating(true);
+
+        const finalSessionName = sessionName.trim() || getDefaultSessionName();
 
         try {
             if (!isGuestMode) {
                 const cloudSession = await db.createSession(
                     user.id,
-                    sessionName || undefined,
+                    finalSessionName,
                     pointValue,
                     selectedPlayers.map(p => ({
                         username: p.username,
@@ -190,7 +204,7 @@ export default function NewSession() {
                 rounds: [],
                 status: 'active',
                 point_value: pointValue,
-                name: sessionName || undefined
+                name: finalSessionName
             };
 
             createSession(newSession);
@@ -208,14 +222,14 @@ export default function NewSession() {
     );
 
     return (
-        <main className="min-h-screen p-8">
+        <main className="min-h-screen p-4 md:p-8">
             <div className="container max-w-2xl">
                 {/* Header */}
-                <header className="mb-8">
+                <header className="mb-6 md:mb-8">
                     <Link href="/dashboard" className="btn btn-secondary mb-4">
                         ← Back
                     </Link>
-                    <h1 className="text-title text-4xl">New Session</h1>
+                    <h1 className="text-title text-2xl md:text-4xl">New Session</h1>
                 </header>
 
                 {/* Session Settings */}

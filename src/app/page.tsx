@@ -75,15 +75,15 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-8">
+    <main className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8">
       {/* Logo/Title */}
-      <div className="text-center mb-12 animate-slide-up">
+      <div className="text-center mb-8 md:mb-12 animate-slide-up">
         <img
           src="/redtenlogo1.png"
           alt="Red 10"
-          style={{ height: '80px', margin: '0 auto 1rem' }}
+          className="h-14 md:h-20 mx-auto mb-2 md:mb-4"
         />
-        <p className="text-xl" style={{ color: 'var(--text-secondary)' }}>
+        <p className="text-base md:text-xl" style={{ color: 'var(--text-secondary)' }}>
           Tracker for TAW&apos;s favourite card game
         </p>
       </div>

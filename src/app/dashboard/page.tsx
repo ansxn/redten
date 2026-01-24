@@ -32,21 +32,21 @@ export default function Dashboard() {
         : '0';
 
     return (
-        <main className="min-h-screen p-8">
+        <main className="min-h-screen p-4 md:p-8">
             <div className="container">
                 {/* Header */}
-                <header className="flex justify-between items-center mb-8">
+                <header className="mobile-header mb-6 md:mb-8">
                     <div>
                         <img
                             src="/redtenlogo1.png"
                             alt="Red 10"
-                            style={{ height: '48px', marginBottom: '0.5rem' }}
+                            className="h-10 md:h-12 mb-2"
                         />
-                        <p style={{ color: 'var(--text-secondary)' }}>
+                        <p style={{ color: 'var(--text-secondary)' }} className="text-sm md:text-base">
                             Welcome back, <strong style={{ color: 'var(--accent-gold)' }}>{user.username}</strong>
                         </p>
                     </div>
-                    <div className="flex gap-md">
+                    <div className="btn-group-mobile">
                         <Link href="/friends" className="btn btn-secondary">
                             Friends
                         </Link>
