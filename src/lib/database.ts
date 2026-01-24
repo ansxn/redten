@@ -4,7 +4,7 @@
  */
 
 import { createClient } from './supabase';
-import { Session, SessionPlayer, Round, UserStats, NewRoundData, generateId } from '@/types';
+import { Session, SessionPlayer, Round, UserStats, NewRoundData, generateId, User } from '@/types';
 import { calculateRoundScores, applyRoundScores } from './scoring';
 
 const supabase = createClient();
@@ -50,6 +50,29 @@ export async function updateUserStats(userId: string, updates: Partial<UserStats
     if (error) {
         console.error('Error updating user stats:', error);
     }
+}
+
+export async function getUserProfile(userId: string): Promise<User | null> {
+    if (!supabase) return null;
+
+    const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+    if (error) {
+        console.error('Error fetching user profile:', error);
+        return null;
+    }
+
+    return data ? {
+        id: data.id,
+        username: data.username,
+        // email: data.email, // Email is not in public profiles table
+        created_at: data.created_at,
+        avatar_color: data.avatar_color
+    } : null;
 }
 
 // ============ SESSIONS ============
@@ -312,8 +335,47 @@ export async function addRound(
 export async function endSession(sessionId: string): Promise<void> {
     if (!supabase) return;
 
+    // 1. Mark session as completed
     await supabase
         .from('sessions')
         .update({ status: 'completed', updated_at: new Date().toISOString() })
         .eq('id', sessionId);
+
+    // 2. Fetch session details to calculate stats
+    const session = await getSession(sessionId);
+    if (!session) return;
+
+    // 3. Update stats for all registered users in the session
+    for (const player of session.players) {
+        // Skip guests or if no user_id (shouldn't happen for registered users)
+        if (player.is_guest || !player.user_id) continue;
+
+        // Fetch current stats
+        const currentStats = await getUserStats(player.user_id);
+
+        // Calculate session earnings
+        const earnings = player.session_score * session.point_value;
+        const won = player.session_score > 0;
+
+        // Prepare new stats
+        if (currentStats) {
+            await updateUserStats(player.user_id, {
+                sessions_played: currentStats.sessions_played + 1,
+                lifetime_earnings: currentStats.lifetime_earnings + earnings,
+                total_rounds_played: currentStats.total_rounds_played + session.rounds.length,
+                // Count rounds won (this is approximate if we don't track round-by-round here, 
+                // but usually fine to increment by total wins in session if we had that data.
+                // For now, let's just stick to session-level updates or we need to count round wins)
+
+                // Correction: We should count round wins from the session rounds
+                rounds_won: currentStats.rounds_won + session.rounds.filter(r => {
+                    const score = r.points_awarded[player.user_id] || 0;
+                    return score > 0;
+                }).length,
+
+                best_session: Math.max(currentStats.best_session, earnings),
+                worst_session: Math.min(currentStats.worst_session, earnings)
+            });
+        }
+    }
 }

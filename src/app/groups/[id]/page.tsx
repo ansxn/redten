@@ -238,22 +238,24 @@ export default function GroupDetailPage() {
                                                 >
                                                     #{index + 1}
                                                 </span>
-                                                <div
-                                                    className="player-avatar"
-                                                    style={{
-                                                        background: member.avatar_url
-                                                            ? `url(${member.avatar_url}) center/cover`
-                                                            : member.avatar_color,
-                                                        width: 40,
-                                                        height: 40
-                                                    }}
-                                                >
-                                                    {!member.avatar_url && member.username.charAt(0)}
-                                                </div>
-                                                <span className="font-bold">
-                                                    {member.username}
-                                                    {isMe && <span style={{ color: 'var(--accent-gold)' }}> (You)</span>}
-                                                </span>
+                                                <Link href={`/profile/${member.user_id}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+                                                    <div
+                                                        className="player-avatar"
+                                                        style={{
+                                                            background: member.avatar_url
+                                                                ? `url(${member.avatar_url}) center/cover`
+                                                                : member.avatar_color,
+                                                            width: 40,
+                                                            height: 40
+                                                        }}
+                                                    >
+                                                        {!member.avatar_url && member.username.charAt(0)}
+                                                    </div>
+                                                    <span className="font-bold">
+                                                        {member.username}
+                                                        {isMe && <span style={{ color: 'var(--accent-gold)' }}> (You)</span>}
+                                                    </span>
+                                                </Link>
                                             </div>
 
                                             {/* Stats Grid */}

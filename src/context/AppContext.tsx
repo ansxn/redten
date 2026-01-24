@@ -21,7 +21,7 @@ interface AppContextType {
     createSession: (session: Session) => void;
     updateSession: (session: Session) => void;
     setActiveSession: (session: Session | null) => void;
-    endSession: (sessionId: string) => void;
+    endSession: (sessionId: string) => Promise<void>;
     loadSessions: () => Promise<void>;
     loadSession: (sessionId: string) => Promise<Session | null>;
 
@@ -290,10 +290,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    const endSessionHandler = (sessionId: string) => {
+    const endSessionHandler = async (sessionId: string) => {
         // Update in cloud if not guest
         if (supabase && !isGuestMode) {
-            db.endSession(sessionId);
+            await db.endSession(sessionId);
+
+            // Reload stats to get the server-calculated updates
+            if (user) {
+                const cloudStats = await db.getUserStats(user.id);
+                if (cloudStats) {
+                    setUserStats(cloudStats);
+                }
+            }
         }
 
         setSessions(prev => prev.map(s =>

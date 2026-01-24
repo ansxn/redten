@@ -244,23 +244,9 @@ export default function SessionPage() {
     };
 
     const handleEndSession = async () => {
-        // Update stats for lifetime earnings
-        if (user) {
-            const userPlayer = session.players.find(p =>
-                p.user_id === user.id || p.username === user.username
-            );
-            if (userPlayer) {
-                const earnings = userPlayer.session_score * session.point_value;
-                updateStats({
-                    sessions_played: (userStats?.sessions_played || 0) + 1,
-                    lifetime_earnings: (userStats?.lifetime_earnings || 0) + earnings,
-                    best_session: Math.max(userStats?.best_session || 0, earnings),
-                    worst_session: Math.min(userStats?.worst_session || 0, earnings)
-                });
-            }
+        if (session.status !== 'completed') {
+            await endSession(sessionId);
         }
-
-        endSession(sessionId);
         setPhase('payout');
     };
 
@@ -313,20 +299,41 @@ export default function SessionPage() {
                                     {session.players.map(player => (
                                         <div key={player.user_id} className="player-card">
                                             <div className="flex items-center gap-3">
-                                                <div
-                                                    className="player-avatar"
-                                                    style={{ background: player.avatar_color }}
-                                                >
-                                                    {player.username.charAt(0)}
-                                                </div>
-                                                <div>
-                                                    <div className="font-bold">{player.username}</div>
-                                                    <div className={`player-score ${player.session_score > 0 ? 'positive' :
-                                                        player.session_score < 0 ? 'negative' : 'neutral'
-                                                        }`}>
-                                                        {formatPoints(player.session_score)} pts
-                                                    </div>
-                                                </div>
+                                                {player.is_guest ? (
+                                                    <>
+                                                        <div
+                                                            className="player-avatar"
+                                                            style={{ background: player.avatar_color }}
+                                                        >
+                                                            {player.username.charAt(0)}
+                                                        </div>
+                                                        <div>
+                                                            <div className="font-bold">{player.username}</div>
+                                                            <div className={`player-score ${player.session_score > 0 ? 'positive' :
+                                                                player.session_score < 0 ? 'negative' : 'neutral'
+                                                                }`}>
+                                                                {formatPoints(player.session_score)} pts
+                                                            </div>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <Link href={`/profile/${player.user_id}`} className="flex items-center gap-3 w-full hover:opacity-80 transition-opacity">
+                                                        <div
+                                                            className="player-avatar"
+                                                            style={{ background: player.avatar_color }}
+                                                        >
+                                                            {player.username.charAt(0)}
+                                                        </div>
+                                                        <div>
+                                                            <div className="font-bold underline decoration-dotted underline-offset-4">{player.username}</div>
+                                                            <div className={`player-score ${player.session_score > 0 ? 'positive' :
+                                                                player.session_score < 0 ? 'negative' : 'neutral'
+                                                                }`}>
+                                                                {formatPoints(player.session_score)} pts
+                                                            </div>
+                                                        </div>
+                                                    </Link>
+                                                )}
                                             </div>
                                         </div>
                                     ))}
@@ -680,7 +687,16 @@ export default function SessionPage() {
                                     .sort((a, b) => b.session_score - a.session_score)
                                     .map(player => (
                                         <div key={player.user_id} className="flex justify-between items-center">
-                                            <span>{player.username}</span>
+                                            {player.is_guest ? (
+                                                <span>{player.username}</span>
+                                            ) : (
+                                                <Link
+                                                    href={`/profile/${player.user_id}`}
+                                                    className="hover:underline decoration-dotted underline-offset-4"
+                                                >
+                                                    {player.username}
+                                                </Link>
+                                            )}
                                             <span className={`font-bold font-mono ${player.session_score > 0 ? 'text-green-400' :
                                                 player.session_score < 0 ? 'text-red-400' : ''
                                                 }`}>

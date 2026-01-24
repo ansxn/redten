@@ -155,13 +155,15 @@ export default function FriendsPage() {
                                 <div key={result.id} className="player-card">
                                     <div className="flex justify-between items-center">
                                         <div className="flex items-center gap-3">
-                                            <div
-                                                className="player-avatar"
-                                                style={{ background: result.avatar_color || '#a855f7' }}
-                                            >
-                                                {result.username.charAt(0)}
-                                            </div>
-                                            <span className="font-bold">{result.username}</span>
+                                            <Link href={`/profile/${result.id}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+                                                <div
+                                                    className="player-avatar"
+                                                    style={{ background: result.avatar_color || '#a855f7' }}
+                                                >
+                                                    {result.username.charAt(0)}
+                                                </div>
+                                                <span className="font-bold underline decoration-dotted underline-offset-4">{result.username}</span>
+                                            </Link>
                                         </div>
                                         <button
                                             className="btn btn-green"
@@ -203,13 +205,15 @@ export default function FriendsPage() {
                                 <div key={friend.id} className="player-card">
                                     <div className="flex justify-between items-center">
                                         <div className="flex items-center gap-3">
-                                            <div
-                                                className="player-avatar"
-                                                style={{ background: friend.avatar_color }}
-                                            >
-                                                {friend.username.charAt(0)}
-                                            </div>
-                                            <span className="font-bold">{friend.username}</span>
+                                            <Link href={`/profile/${friend.id}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+                                                <div
+                                                    className="player-avatar"
+                                                    style={{ background: friend.avatar_color }}
+                                                >
+                                                    {friend.username.charAt(0)}
+                                                </div>
+                                                <span className="font-bold underline decoration-dotted underline-offset-4">{friend.username}</span>
+                                            </Link>
                                         </div>
                                         <button
                                             className="btn btn-secondary"
