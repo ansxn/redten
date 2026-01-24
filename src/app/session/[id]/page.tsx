@@ -212,7 +212,7 @@ export default function SessionPage() {
         }
     };
 
-    const handleWash = () => {
+    const handleWash = async () => {
         // Wash = no points change, just record the round
         const roundData: NewRoundData = {
             multiplier,
@@ -221,6 +221,24 @@ export default function SessionPage() {
             result: 'wash'
         };
 
+        // Save to database if authenticated
+        if (!isGuestMode && user) {
+            const dbResult = await db.addRound(sessionId, roundData, session.players);
+            if (dbResult) {
+                const updatedSession = {
+                    ...session,
+                    players: dbResult.updatedPlayers,
+                    rounds: [...session.rounds, dbResult.round]
+                };
+                updateSession(updatedSession);
+                setSession(updatedSession);
+                setLastRoundScores({});
+                setPhase('results');
+                return;
+            }
+        }
+
+        // Fallback to local for guest mode
         const newRound: Round = {
             id: generateId(),
             round_number: session.rounds.length + 1,

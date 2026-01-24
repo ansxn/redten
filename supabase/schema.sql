@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS public.rounds (
   round_number INTEGER NOT NULL,
   multiplier INTEGER DEFAULT 1 CHECK (multiplier IN (1, 2, 4)),
   result TEXT NOT NULL CHECK (result IN ('red_win', 'blue_win', 'wash')),
+  finish_order TEXT[] DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

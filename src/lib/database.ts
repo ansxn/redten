@@ -281,7 +281,8 @@ export async function addRound(
             session_id: sessionId,
             round_number: roundNumber,
             multiplier: roundData.multiplier,
-            result: roundData.result
+            result: roundData.result,
+            finish_order: roundData.finish_order || []
         })
         .select()
         .single();
@@ -301,14 +302,16 @@ export async function addRound(
         await supabase.from('round_red_team').insert(redTeamInserts);
     }
 
-    // Add points
+    // Add points (only if there are any - washes have no points)
     const pointsInserts = Object.entries(scores).map(([playerId, points]) => ({
         round_id: roundDbData.id,
         player_id: playerId,
         points
     }));
 
-    await supabase.from('round_points').insert(pointsInserts);
+    if (pointsInserts.length > 0) {
+        await supabase.from('round_points').insert(pointsInserts);
+    }
 
     // Update player scores
     for (const player of updatedPlayers) {
