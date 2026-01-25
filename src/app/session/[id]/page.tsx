@@ -27,6 +27,7 @@ export default function SessionPage() {
     const [finishOrder, setFinishOrder] = useState<string[]>([]);
     const [lastRoundScores, setLastRoundScores] = useState<Record<string, number>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [editingRoundId, setEditingRoundId] = useState<string | null>(null);
 
     // Load session from database
     useEffect(() => {
@@ -87,11 +88,13 @@ export default function SessionPage() {
     };
 
     const handleCall = () => {
-        if (multiplier === 1) setMultiplier(2);
+        // Toggle: If 2 (Call) -> 1 (Normal). If 1 or 4 -> 2 (Call).
+        setMultiplier(current => current === 2 ? 1 : 2);
     };
 
     const handleDoubleCall = () => {
-        if (multiplier === 2) setMultiplier(4);
+        // Toggle: If 4 (Double) -> 2 (Call). If 1 or 2 -> 4 (Double).
+        setMultiplier(current => current === 4 ? 2 : 4);
     };
 
     const proceedToFinishOrder = () => {
@@ -140,6 +143,7 @@ export default function SessionPage() {
             return;
         }
 
+        // Prepare round data
         const roundData: NewRoundData = {
             multiplier,
             red_team_player_ids: selectedRedPlayers,
@@ -147,68 +151,134 @@ export default function SessionPage() {
             result
         };
 
-        try {
-            // If authenticated, use cloud database
+        // HANDLE EDIT MODE
+        if (editingRoundId) {
+            // Update cloud
             if (!isGuestMode && user) {
-                const dbResult = await db.addRound(sessionId, roundData, session.players);
+                const dbResult = await db.updateRound(sessionId, editingRoundId, roundData, session.players);
                 if (dbResult) {
+                    const updatedRounds = session.rounds.map(r =>
+                        r.id === editingRoundId
+                            ? { ...r, ...roundData, round_number: r.round_number, id: r.id, created_at: r.created_at, points_awarded: calculateRoundScores(roundData, session.players) }
+                            : r
+                    );
+
                     const updatedSession = {
                         ...session,
                         players: dbResult.updatedPlayers,
-                        rounds: [...session.rounds, dbResult.round]
+                        rounds: updatedRounds
                     };
+
                     updateSession(updatedSession);
                     setSession(updatedSession);
-                    setLastRoundScores(dbResult.round.points_awarded);
-                    setPhase('results');
-
-                    // Stats are now updated in the database by addRound
-                    // Reload stats from database to reflect changes
-                    const updatedStats = await db.getUserStats(user.id);
-                    if (updatedStats) {
-                        updateStats(updatedStats);
-                    }
-                    return;
+                    setEditingRoundId(null);
+                    setPhase('lobby'); // Go back to lobby after edit
                 }
-            }
+            } else {
+                // Determine old scores to revert
+                const oldRound = session.rounds.find(r => r.id === editingRoundId);
+                const oldScores = oldRound ? oldRound.points_awarded : {};
 
-            // Fallback to local
-            const scores = calculateRoundScores(roundData, session.players);
-            const updatedPlayers = applyRoundScores(session.players, scores);
+                // Calculate new scores
+                const newScores = calculateRoundScores(roundData, session.players);
 
-            const newRound: Round = {
-                id: generateId(),
-                round_number: session.rounds.length + 1,
-                multiplier,
-                red_team_player_ids: selectedRedPlayers,
-                finish_order: finishOrder,
-                result,
-                points_awarded: scores,
-                created_at: new Date().toISOString()
-            };
-
-            const updatedSession = {
-                ...session,
-                players: updatedPlayers,
-                rounds: [...session.rounds, newRound]
-            };
-
-            updateSession(updatedSession);
-            setSession(updatedSession);
-            setLastRoundScores(scores);
-            setPhase('results');
-
-            // Update user stats if they participated
-            if (user && scores[user.id] !== undefined) {
-                const won = scores[user.id] > 0;
-                updateStats({
-                    total_rounds_played: (userStats?.total_rounds_played || 0) + 1,
-                    rounds_won: (userStats?.rounds_won || 0) + (won ? 1 : 0)
+                // Recalculate all players
+                const updatedPlayers = session.players.map(p => {
+                    const oldPoints = oldScores[p.user_id] || 0;
+                    const newPoints = newScores[p.user_id] || 0;
+                    return {
+                        ...p,
+                        session_score: p.session_score - oldPoints + newPoints
+                    };
                 });
+
+                const updatedRounds = session.rounds.map(r =>
+                    r.id === editingRoundId
+                        ? {
+                            ...r,
+                            ...roundData,
+                            points_awarded: newScores
+                        }
+                        : r
+                );
+
+                const updatedSession = {
+                    ...session,
+                    players: updatedPlayers,
+                    rounds: updatedRounds
+                };
+
+                updateSession(updatedSession);
+                setSession(updatedSession);
+                setEditingRoundId(null);
+                setPhase('lobby');
             }
-        } finally {
+
             setIsSubmitting(false);
+            return;
         }
+
+        // NORMAL NEW ROUND
+        // Save to database if authenticated
+        if (!isGuestMode && user) {
+            const dbResult = await db.addRound(sessionId, roundData, session.players);
+            if (dbResult) {
+                const updatedSession = {
+                    ...session,
+                    players: dbResult.updatedPlayers,
+                    rounds: [...session.rounds, dbResult.round]
+                };
+                updateSession(updatedSession);
+                setSession(updatedSession);
+                setLastRoundScores(dbResult.round.points_awarded);
+                setPhase('results');
+
+                // Stats are now updated in the database by addRound
+                // Reload stats from database to reflect changes
+                const updatedStats = await db.getUserStats(user.id);
+                if (updatedStats) {
+                    updateStats(updatedStats);
+                }
+                setIsSubmitting(false);
+                return;
+            }
+        }
+
+        // Fallback to local
+        const scores = calculateRoundScores(roundData, session.players);
+        const updatedPlayers = applyRoundScores(session.players, scores);
+
+        const newRound: Round = {
+            id: generateId(),
+            round_number: session.rounds.length + 1,
+            multiplier,
+            red_team_player_ids: selectedRedPlayers,
+            finish_order: finishOrder,
+            result,
+            points_awarded: scores,
+            created_at: new Date().toISOString()
+        };
+
+        const updatedSession = {
+            ...session,
+            players: updatedPlayers,
+            rounds: [...session.rounds, newRound]
+        };
+
+        updateSession(updatedSession);
+        setSession(updatedSession);
+        setLastRoundScores(scores);
+        setPhase('results');
+
+        // Update user stats if they participated
+        if (user && scores[user.id] !== undefined) {
+            const won = scores[user.id] > 0;
+            updateStats({
+                total_rounds_played: (userStats?.total_rounds_played || 0) + 1,
+                rounds_won: (userStats?.rounds_won || 0) + (won ? 1 : 0)
+            });
+        }
+        setIsSubmitting(false);
     };
 
     const handleWash = async () => {
@@ -221,9 +291,69 @@ export default function SessionPage() {
         const roundData: NewRoundData = {
             multiplier,
             red_team_player_ids: selectedRedPlayers,
-            finish_order: finishOrder,  // Use actual finish order instead of empty
+            finish_order: finishOrder,
             result: 'wash'
         };
+
+        // Handle Edit Wash
+        if (editingRoundId) {
+            // Update cloud
+            if (!isGuestMode && user) {
+                const dbResult = await db.updateRound(sessionId, editingRoundId, roundData, session.players);
+                if (dbResult) {
+                    const updatedRounds = session.rounds.map(r =>
+                        r.id === editingRoundId
+                            ? { ...r, ...roundData, round_number: r.round_number, id: r.id, created_at: r.created_at, points_awarded: {} }
+                            : r
+                    );
+
+                    const updatedSession = {
+                        ...session,
+                        players: dbResult.updatedPlayers,
+                        rounds: updatedRounds
+                    };
+
+                    updateSession(updatedSession);
+                    setSession(updatedSession);
+                    setEditingRoundId(null);
+                    setPhase('lobby');
+                }
+            } else {
+                // Local Guest Mode Edit
+                const oldRound = session.rounds.find(r => r.id === editingRoundId);
+                const oldScores = oldRound ? oldRound.points_awarded : {};
+
+                // Wash implies 0 new points
+                const newScores: Record<string, number> = {};
+
+                // Recalculate
+                const updatedPlayers = session.players.map(p => {
+                    const oldPoints = oldScores[p.user_id] || 0;
+                    return {
+                        ...p,
+                        session_score: p.session_score - oldPoints // Remove old points, add 0
+                    };
+                });
+
+                const updatedRounds = session.rounds.map(r =>
+                    r.id === editingRoundId
+                        ? { ...r, ...roundData, points_awarded: newScores }
+                        : r
+                );
+
+                const updatedSession = {
+                    ...session,
+                    players: updatedPlayers,
+                    rounds: updatedRounds
+                };
+
+                updateSession(updatedSession);
+                setSession(updatedSession);
+                setEditingRoundId(null);
+                setPhase('lobby');
+            }
+            return;
+        }
 
         // Save to database if authenticated
         if (!isGuestMode && user) {
@@ -248,7 +378,7 @@ export default function SessionPage() {
             round_number: session.rounds.length + 1,
             multiplier,
             red_team_player_ids: selectedRedPlayers,
-            finish_order: finishOrder,  // Use actual finish order
+            finish_order: finishOrder,
             result: 'wash',
             points_awarded: {},
             created_at: new Date().toISOString()
@@ -263,6 +393,21 @@ export default function SessionPage() {
         setSession(updatedSession);
         setLastRoundScores({});
         setPhase('results');
+    };
+
+    const handleEditRound = (round: Round) => {
+        setEditingRoundId(round.id);
+        setMultiplier(round.multiplier);
+        setSelectedRedPlayers(round.red_team_player_ids || []);
+        setFinishOrder(round.finish_order || []);
+
+        // Determine phase based on what's missing? No, just start at teams is safest
+        setPhase('teams');
+    };
+
+    const cancelEdit = () => {
+        setEditingRoundId(null);
+        setPhase('lobby');
     };
 
     const handleEndSession = async () => {
@@ -378,15 +523,14 @@ export default function SessionPage() {
                                 <div className="flex gap-sm md:gap-md mb-6 flex-wrap">
                                     <button
                                         onClick={handleCall}
-                                        disabled={multiplier >= 2}
-                                        className={`btn flex-1 ${multiplier >= 2 ? 'btn-secondary opacity-50' : 'btn-call'}`}
+                                        className={`btn flex-1 ${multiplier >= 2 ? 'btn-call' : 'btn-secondary'}`}
                                     >
                                         {multiplier >= 2 ? '✓ Called' : 'Call (2×)'}
                                     </button>
                                     <button
                                         onClick={handleDoubleCall}
-                                        disabled={multiplier !== 2}
-                                        className={`btn flex-1 ${multiplier === 4 ? 'btn-double' : multiplier === 2 ? 'btn-double' : 'btn-secondary opacity-50'}`}
+                                        disabled={multiplier === 1}
+                                        className={`btn flex-1 ${multiplier === 4 ? 'btn-double' : multiplier === 1 ? 'btn-secondary opacity-50' : 'btn-secondary'}`}
                                     >
                                         {multiplier === 4 ? '✓ Double' : 'Double (4×)'}
                                     </button>
@@ -425,7 +569,7 @@ export default function SessionPage() {
 
                                 <div className="flex gap-sm flex-wrap">
                                     <button
-                                        onClick={() => setPhase('lobby')}
+                                        onClick={editingRoundId ? cancelEdit : () => setPhase('lobby')}
                                         className="btn btn-secondary flex-1"
                                     >
                                         Cancel
@@ -553,7 +697,7 @@ export default function SessionPage() {
                                         disabled={finishOrder.length !== 6 || isSubmitting}
                                         className="btn btn-green flex-1"
                                     >
-                                        {isSubmitting ? 'Saving...' : 'Complete Round'}
+                                        {isSubmitting ? 'Saving...' : editingRoundId ? 'Update Round' : 'Complete Round'}
                                     </button>
                                 </div>
                             </div>
@@ -688,10 +832,23 @@ export default function SessionPage() {
                                                     </span>
                                                 )}
                                             </div>
-                                            <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                                                {round.result === 'red_win' ? '🔴 Red' :
-                                                    round.result === 'blue_win' ? '🔵 Blue' : '🟡 Wash'}
-                                            </span>
+                                            <div className="flex flex-col items-end gap-1">
+                                                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                                                    {round.result === 'red_win' ? '🔴 Red' :
+                                                        round.result === 'blue_win' ? '🔵 Blue' : '🟡 Wash'}
+                                                </span>
+                                                {!editingRoundId && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleEditRound(round);
+                                                        }}
+                                                        className="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 border border-gray-600"
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
