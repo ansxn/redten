@@ -507,7 +507,7 @@ export async function updateRound(
 
     // 2. Update Red Team (Delete old, Insert new)
     await supabase.from('round_red_team').delete().eq('round_id', roundId);
-    
+
     if (roundData.red_team_player_ids.length > 0) {
         const redTeamInserts = roundData.red_team_player_ids.map(playerId => ({
             round_id: roundId,
@@ -518,10 +518,10 @@ export async function updateRound(
 
     // 3. Recalculate scores for THIS round
     const scores = calculateRoundScores(roundData, players);
-    
+
     // 4. Update Points (Delete old, Insert new)
     await supabase.from('round_points').delete().eq('round_id', roundId);
-    
+
     const pointsInserts = Object.entries(scores).map(([playerId, points]) => ({
         round_id: roundId,
         player_id: playerId,
@@ -535,23 +535,33 @@ export async function updateRound(
     // 5. CRITICAL: Recalculate ALL session scores from scratch
     // We can't just apply diffs because we might have edited a round in the middle
     // Easier to just re-sum everything from the database
-    
-    const { data: allRoundPoints } = await supabase
-        .from('round_points')
-        .select('player_id, points')
-        .in('round_id', (
-            await supabase.from('rounds').select('id').eq('session_id', sessionId)
-        ).data?.map(r => r.id) || []);
+
+    // First, get all round IDs for this session
+    const { data: sessionRounds } = await supabase
+        .from('rounds')
+        .select('id')
+        .eq('session_id', sessionId);
+
+    const roundIds = sessionRounds?.map(r => r.id) || [];
+
+    // Then get all points for those rounds
+    const { data: allRoundPoints } = roundIds.length > 0
+        ? await supabase
+            .from('round_points')
+            .select('player_id, points')
+            .in('round_id', roundIds)
+        : { data: [] };
 
     const playerTotals: Record<string, number> = {};
-    
+
     // Initialize with 0
     players.forEach(p => playerTotals[p.user_id] = 0);
-    
-    // Sum points
-    allRoundPoints?.forEach((rp: { player_id: string; points: number }) => {
+
+    // Sum points - NOTE: points come as string from database, need parseFloat
+    allRoundPoints?.forEach((rp: { player_id: string; points: string | number }) => {
         if (playerTotals[rp.player_id] !== undefined) {
-            playerTotals[rp.player_id] += rp.points;
+            const pointValue = typeof rp.points === 'string' ? parseFloat(rp.points) : rp.points;
+            playerTotals[rp.player_id] += pointValue;
         }
     });
 
@@ -567,7 +577,7 @@ export async function updateRound(
             .update({ session_score: player.session_score })
             .eq('id', player.user_id);
     }
-    
+
     // Note: User Stats (lifetime earnings etc) are handled by DB Triggers now!
     // We don't need to manually update them here.
 

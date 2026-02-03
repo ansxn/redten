@@ -351,19 +351,34 @@ export function calculatePointsPreview(
 /**
  * Determine the result based on finish order
  * Winner = team of the first person out
+ * 
+ * IMPORTANT: finishOrder must contain all 6 player IDs for proper wash detection
  */
 export function determineResult(
     finishOrder: string[],
     redTeamIds: string[]
 ): 'red_win' | 'blue_win' | 'wash' {
+    // Need at least one player to determine winner
     if (finishOrder.length === 0) return 'wash';
+
+    // For proper wash detection, we need all 6 players
+    // If we don't have all players, we can't reliably detect wash
+    if (finishOrder.length < 6) {
+        // Without full finish order, determine winner based on first place only
+        const firstOutId = finishOrder[0];
+        return redTeamIds.includes(firstOutId) ? 'red_win' : 'blue_win';
+    }
 
     const firstOutId = finishOrder[0];
     const redWins = redTeamIds.includes(firstOutId);
 
-    const winningTeamIds = redWins ? redTeamIds : finishOrder.filter(id => !redTeamIds.includes(id));
+    // Derive blue team from all players in finish order minus red team
+    // This is correct because finishOrder contains all 6 player IDs
+    const blueTeamIds = finishOrder.filter(id => !redTeamIds.includes(id));
 
-    // Check for wash
+    const winningTeamIds = redWins ? redTeamIds : blueTeamIds;
+
+    // Check for wash (winning team member gets out last)
     if (isWash(finishOrder, winningTeamIds)) {
         return 'wash';
     }

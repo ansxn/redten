@@ -46,10 +46,30 @@ export default function SessionPage() {
     }, [sessionId]);
 
     // Update local session when sessions change
+    // SAFEGUARD: Only update if the incoming session has complete data
+    // This prevents incomplete data from getUserSessions overwriting complete round data
     useEffect(() => {
         const updated = sessions.find(s => s.id === sessionId);
         if (updated) {
-            setSession(updated);
+            // Check if current session has complete rounds
+            const currentHasCompleteRounds = session?.rounds && session.rounds.length > 0 &&
+                session.rounds[0]?.result !== undefined;
+
+            // Check if updated session has incomplete rounds
+            const updatedHasIncompleteRounds = updated.rounds.length > 0 &&
+                updated.rounds[0]?.result === undefined;
+
+            // Don't overwrite complete data with incomplete data
+            if (currentHasCompleteRounds && updatedHasIncompleteRounds) {
+                // Instead, merge: take updated metadata but keep our complete rounds
+                setSession(prev => prev ? {
+                    ...updated,
+                    rounds: prev.rounds,
+                    players: prev.players // Keep our player scores too
+                } : updated);
+            } else {
+                setSession(updated);
+            }
         }
     }, [sessions, sessionId]);
 

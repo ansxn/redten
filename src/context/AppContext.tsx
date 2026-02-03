@@ -52,14 +52,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
             const cloudSessions = await db.getUserSessions(user.id);
 
             // Merge with existing sessions to preserve loaded rounds
+            // CRITICAL: getUserSessions only fetches round IDs, not full round data
+            // We must preserve existing complete rounds when cloudSession has incomplete data
             setSessions(prev => {
                 return cloudSessions.map(cloudSession => {
                     const existing = prev.find(p => p.id === cloudSession.id);
-                    // If we have an existing session with rounds, and the new one has none (list view),
-                    // keep the existing rounds
-                    if (existing && existing.rounds.length > 0 && cloudSession.rounds.length === 0) {
+                    if (!existing) return cloudSession;
+
+                    // Check if existing has complete rounds (with result field)
+                    const existingHasCompleteRounds = existing.rounds.length > 0 &&
+                        existing.rounds[0]?.result !== undefined;
+
+                    // Check if cloud session has incomplete rounds (only IDs, no result)
+                    // getUserSessions returns rounds with only { id } shape
+                    const cloudHasIncompleteRounds = cloudSession.rounds.length > 0 &&
+                        cloudSession.rounds[0]?.result === undefined;
+
+                    // Preserve existing complete rounds if cloud has incomplete data
+                    if (existingHasCompleteRounds && cloudHasIncompleteRounds) {
+                        return {
+                            ...cloudSession,
+                            rounds: existing.rounds,
+                            // Also preserve player scores from existing if we have more complete data
+                            players: existing.players.length > 0 ? existing.players : cloudSession.players
+                        };
+                    }
+
+                    // Also preserve if cloud has no rounds but existing does
+                    if (existing.rounds.length > 0 && cloudSession.rounds.length === 0) {
                         return { ...cloudSession, rounds: existing.rounds };
                     }
+
                     return cloudSession;
                 });
             });
