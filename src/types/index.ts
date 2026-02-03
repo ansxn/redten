@@ -32,7 +32,8 @@ export interface Session {
 }
 
 export interface SessionPlayer {
-  user_id: string;
+  id: string;  // session_players row ID - used for gameplay, round_points, finish_order
+  user_id: string | null;  // auth user ID (profiles.id) - used for stats, null for guests
   username: string;
   session_score: number; // Running total for this session
   is_guest: boolean;

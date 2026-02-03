@@ -149,7 +149,7 @@ export default function SessionPage() {
     // Calculate points preview based on current finish order
     const getPointsPreview = (): number => {
         if (finishOrder.length !== 6) return 0;
-        const allPlayerIds = session.players.map(p => p.user_id);
+        const allPlayerIds = session.players.map(p => p.id);
         return calculatePointsPreview(finishOrder, selectedRedPlayers, allPlayerIds);
     };
 
@@ -204,8 +204,8 @@ export default function SessionPage() {
 
                 // Recalculate all players
                 const updatedPlayers = session.players.map(p => {
-                    const oldPoints = oldScores[p.user_id] || 0;
-                    const newPoints = newScores[p.user_id] || 0;
+                    const oldPoints = oldScores[p.id] || 0;
+                    const newPoints = newScores[p.id] || 0;
                     return {
                         ...p,
                         session_score: p.session_score - oldPoints + newPoints
@@ -348,7 +348,7 @@ export default function SessionPage() {
 
                 // Recalculate
                 const updatedPlayers = session.players.map(p => {
-                    const oldPoints = oldScores[p.user_id] || 0;
+                    const oldPoints = oldScores[p.id] || 0;
                     return {
                         ...p,
                         session_score: p.session_score - oldPoints // Remove old points, add 0
@@ -484,7 +484,7 @@ export default function SessionPage() {
 
                                 <div className="grid-players mb-6">
                                     {session.players.map(player => (
-                                        <div key={player.user_id} className="player-card">
+                                        <div key={player.id} className="player-card">
                                             <div className="flex items-center gap-3">
                                                 {player.is_guest ? (
                                                     <>
@@ -502,9 +502,9 @@ export default function SessionPage() {
                                                         </div>
                                                     </>
                                                 ) : (
-                                                    <Link href={`/profile/${player.user_id}`} className="flex items-center gap-3 w-full hover:opacity-80 transition-opacity">
+                                                    <Link href={`/profile/${player.user_id || ''}`} className="flex items-center gap-3 w-full hover:opacity-80 transition-opacity">
                                                         <Avatar
-                                                            userId={player.user_id}
+                                                            userId={player.user_id || undefined}
                                                             username={player.username}
                                                             avatarColor={player.avatar_color}
                                                         />
@@ -564,21 +564,21 @@ export default function SessionPage() {
                                     <div className="grid-players">
                                         {session.players.map(player => (
                                             <div
-                                                key={player.user_id}
-                                                onClick={() => toggleRedPlayer(player.user_id)}
-                                                className={`player-card ${selectedRedPlayers.includes(player.user_id) ? 'red-team' : ''
+                                                key={player.id}
+                                                onClick={() => toggleRedPlayer(player.id)}
+                                                className={`player-card ${selectedRedPlayers.includes(player.id) ? 'red-team' : ''
                                                     }`}
                                             >
                                                 <div className="flex items-center gap-3">
                                                     <div
                                                         className="player-avatar"
                                                         style={{
-                                                            background: selectedRedPlayers.includes(player.user_id)
+                                                            background: selectedRedPlayers.includes(player.id)
                                                                 ? 'var(--accent-red)'
                                                                 : player.avatar_color
                                                         }}
                                                     >
-                                                        {selectedRedPlayers.includes(player.user_id) ? '🔴' : player.username.charAt(0)}
+                                                        {selectedRedPlayers.includes(player.id) ? '🔴' : player.username.charAt(0)}
                                                     </div>
                                                     <span className="font-bold">{player.username}</span>
                                                 </div>
@@ -643,14 +643,14 @@ export default function SessionPage() {
                                 <div className="mb-6">
                                     <div className="grid-players">
                                         {session.players.map(player => {
-                                            const position = getFinishPosition(player.user_id);
-                                            const isRed = selectedRedPlayers.includes(player.user_id);
+                                            const position = getFinishPosition(player.id);
+                                            const isRed = selectedRedPlayers.includes(player.id);
                                             const isSelected = position !== null;
 
                                             return (
                                                 <div
-                                                    key={player.user_id}
-                                                    onClick={() => !isSelected && addToFinishOrder(player.user_id)}
+                                                    key={player.id}
+                                                    onClick={() => !isSelected && addToFinishOrder(player.id)}
                                                     className={`player-card ${isRed ? 'red-team' : 'blue-team'} ${isSelected ? 'opacity-50' : ''}`}
                                                     style={{ cursor: isSelected ? 'not-allowed' : 'pointer' }}
                                                 >
@@ -730,10 +730,10 @@ export default function SessionPage() {
 
                                 <div className="grid-players mb-6">
                                     {session.players.map(player => {
-                                        const score = lastRoundScores[player.user_id] || 0;
+                                        const score = lastRoundScores[player.id] || 0;
                                         return (
                                             <div
-                                                key={player.user_id}
+                                                key={player.id}
                                                 className={`player-card ${score > 0 ? 'red-team' : score < 0 ? 'blue-team' : ''}`}
                                             >
                                                 <div className="flex justify-between items-center">
@@ -771,7 +771,7 @@ export default function SessionPage() {
                                 <div className="mb-6">
                                     <h3 className="font-bold mb-3">Final Standings</h3>
                                     {standings.map((item, index) => (
-                                        <div key={item.player.user_id} className="round-item mb-2">
+                                        <div key={item.player.id} className="round-item mb-2">
                                             <div className="flex items-center gap-3">
                                                 <span className="font-bold" style={{ color: 'var(--accent-gold)' }}>
                                                     #{index + 1}
@@ -882,12 +882,12 @@ export default function SessionPage() {
                                 {[...session.players]
                                     .sort((a, b) => b.session_score - a.session_score)
                                     .map(player => (
-                                        <div key={player.user_id} className="flex justify-between items-center">
+                                        <div key={player.id} className="flex justify-between items-center">
                                             {player.is_guest ? (
                                                 <span>{player.username}</span>
                                             ) : (
                                                 <Link
-                                                    href={`/profile/${player.user_id}`}
+                                                    href={`/profile/${player.user_id || ''}`}
                                                     className="hover:underline decoration-dotted underline-offset-4"
                                                 >
                                                     {player.username}

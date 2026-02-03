@@ -190,7 +190,8 @@ export default function NewSession() {
             }
 
             const sessionPlayers: SessionPlayer[] = selectedPlayers.map(p => ({
-                user_id: p.userId || p.id,
+                id: p.id,  // session_players row ID (generated locally for guest mode)
+                user_id: p.userId || null,  // auth user ID (null for guests)
                 username: p.username,
                 session_score: 0,
                 is_guest: p.isGuest,

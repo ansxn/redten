@@ -165,7 +165,8 @@ export async function createSession(
 
     // Convert to our Session type
     const sessionPlayers: SessionPlayer[] = playersData.map(p => ({
-        user_id: p.id, // Use the session_player id as user_id for this session
+        id: p.id,  // session_players row ID
+        user_id: p.user_id || null,  // auth user ID for stats
         username: p.username,
         session_score: parseFloat(p.session_score),
         is_guest: p.is_guest,
@@ -227,9 +228,11 @@ export async function getSession(sessionId: string): Promise<Session | null> {
     }
 
     // Convert to our types
-    // NOTE: p.id is the session_players row ID, p.user_id is the actual profiles FK
+    // id = session_players row ID (for gameplay, round_points, finish_order)
+    // user_id = auth user ID from profiles (for stats, null for guests)
     const sessionPlayers: SessionPlayer[] = playersData.map(p => ({
-        user_id: p.user_id || p.id, // Use actual user_id, fallback to row id for guests
+        id: p.id,  // session_players row ID - THE gameplay identifier
+        user_id: p.user_id || null,  // auth user ID for stats lookup
         username: p.username,
         session_score: parseFloat(p.session_score),
         is_guest: p.is_guest,
@@ -293,7 +296,8 @@ export async function getUserSessions(userId: string): Promise<Session[]> {
         created_at: s.created_at,
         created_by: s.created_by,
         players: s.session_players.map((p: Record<string, unknown>) => ({
-            user_id: (p.user_id as string) || (p.id as string), // Use actual user_id, fallback to row id for guests
+            id: p.id as string,  // session_players row ID for gameplay
+            user_id: (p.user_id as string) || null,  // auth user ID for stats
             username: p.username as string,
             session_score: parseFloat(p.session_score as string),
             is_guest: p.is_guest as boolean,
@@ -364,12 +368,12 @@ export async function addRound(
         await supabase.from('round_points').insert(pointsInserts);
     }
 
-    // Update player scores
+    // Update player scores in session_players table
     for (const player of updatedPlayers) {
         await supabase
             .from('session_players')
             .update({ session_score: player.session_score })
-            .eq('id', player.user_id);
+            .eq('id', player.id);  // Use player.id (session_players row ID)
     }
 
     // Update user_stats for each registered player in the round
@@ -380,17 +384,17 @@ export async function addRound(
         const { data: sessionPlayer } = await supabase
             .from('session_players')
             .select('user_id')
-            .eq('id', player.user_id)
+            .eq('id', player.id)
             .single();
 
         if (!sessionPlayer?.user_id) continue;
 
-        const pointsForPlayer = scores[player.user_id] || 0;
+        const pointsForPlayer = scores[player.id] || 0;
         const won = pointsForPlayer > 0;
 
         // Calculate placement (1-6 based on finish_order, 0 if not found)
         const finishOrder = roundData.finish_order || [];
-        const placementIndex = finishOrder.indexOf(player.user_id);
+        const placementIndex = finishOrder.indexOf(player.id);
         const placement = placementIndex >= 0 ? placementIndex + 1 : 0;
         const gotFirst = placement === 1;
 
@@ -523,8 +527,8 @@ export async function updateRound(
 
     const playerTotals: Record<string, number> = {};
 
-    // Initialize with 0
-    players.forEach(p => playerTotals[p.user_id] = 0);
+    // Initialize with 0 - keyed by player.id
+    players.forEach(p => playerTotals[p.id] = 0);
 
     // Sum points - NOTE: points come as string from database, need parseFloat
     allRoundPoints?.forEach((rp: { player_id: string; points: string | number }) => {
@@ -537,14 +541,14 @@ export async function updateRound(
     // 6. Update session_players with new totals
     const updatedPlayers = players.map(p => ({
         ...p,
-        session_score: playerTotals[p.user_id] || 0
+        session_score: playerTotals[p.id] || 0
     }));
 
     for (const player of updatedPlayers) {
         await supabase
             .from('session_players')
             .update({ session_score: player.session_score })
-            .eq('id', player.user_id);
+            .eq('id', player.id);
     }
 
     // Note: User Stats (lifetime earnings etc) are handled by DB Triggers now!

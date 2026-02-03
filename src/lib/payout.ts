@@ -100,8 +100,8 @@ export function verifyPayouts(transactions: Transaction[]): boolean {
     const netFlow: Record<string, number> = {};
 
     for (const t of transactions) {
-        netFlow[t.from_player.user_id] = (netFlow[t.from_player.user_id] || 0) - t.amount;
-        netFlow[t.to_player.user_id] = (netFlow[t.to_player.user_id] || 0) + t.amount;
+        netFlow[t.from_player.id] = (netFlow[t.from_player.id] || 0) - t.amount;
+        netFlow[t.to_player.id] = (netFlow[t.to_player.id] || 0) + t.amount;
     }
 
     // Sum should be approximately 0

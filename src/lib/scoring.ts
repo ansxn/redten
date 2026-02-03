@@ -151,10 +151,10 @@ export function calculateRoundScores(
 ): Record<string, number> {
     const { multiplier, red_team_player_ids } = roundData;
 
-    // Initialize all scores to 0
+    // Initialize all scores to 0 - keyed by player.id (session_players row ID)
     const scores: Record<string, number> = {};
     players.forEach(p => {
-        scores[p.user_id] = 0;
+        scores[p.id] = 0;
     });
 
     // Need finish order to calculate
@@ -164,10 +164,10 @@ export function calculateRoundScores(
 
     const finishOrder = roundData.finish_order;
 
-    // Divide players into teams
+    // Divide players into teams (using player.id for gameplay)
     const redTeamIds = red_team_player_ids;
     const blueTeamIds = players
-        .map(p => p.user_id)
+        .map(p => p.id)
         .filter(id => !redTeamIds.includes(id));
 
     const redTeamSize = redTeamIds.length;
@@ -265,7 +265,7 @@ export function applyRoundScores(
 ): SessionPlayer[] {
     return players.map(player => ({
         ...player,
-        session_score: player.session_score + (roundScores[player.user_id] || 0)
+        session_score: player.session_score + (roundScores[player.id] || 0)
     }));
 }
 

@@ -22,7 +22,8 @@ import type { SessionPlayer, NewRoundData } from '@/types';
 // Helper to create test players
 function createPlayers(count: number = 6): SessionPlayer[] {
     return Array.from({ length: count }, (_, i) => ({
-        user_id: `player-${i + 1}`,
+        id: `player-${i + 1}`,  // session_players row ID (gameplay identifier)
+        user_id: `auth-user-${i + 1}`,  // auth user ID (for stats)
         username: `Player ${i + 1}`,
         session_score: 0,
         is_guest: false,
@@ -30,9 +31,9 @@ function createPlayers(count: number = 6): SessionPlayer[] {
     }));
 }
 
-// Get all player IDs
+// Get all player IDs (for gameplay - uses player.id)
 function getPlayerIds(players: SessionPlayer[]): string[] {
-    return players.map(p => p.user_id);
+    return players.map(p => p.id);
 }
 
 describe('isWash', () => {
@@ -330,10 +331,10 @@ describe('calculateRoundScores', () => {
 describe('applyRoundScores', () => {
     it('should update player session scores correctly', () => {
         const players: SessionPlayer[] = [
-            { user_id: 'p1', username: 'P1', session_score: 10, is_guest: false, avatar_color: '#fff' },
-            { user_id: 'p2', username: 'P2', session_score: -5, is_guest: false, avatar_color: '#fff' },
+            { id: 'p1', user_id: 'auth1', username: 'P1', session_score: 10, is_guest: false, avatar_color: '#fff' },
+            { id: 'p2', user_id: 'auth2', username: 'P2', session_score: -5, is_guest: false, avatar_color: '#fff' },
         ];
-        const roundScores = { 'p1': 3, 'p2': -3 };
+        const roundScores = { 'p1': 3, 'p2': -3 };  // keyed by player.id
 
         const updated = applyRoundScores(players, roundScores);
 
@@ -343,7 +344,7 @@ describe('applyRoundScores', () => {
 
     it('should handle missing player in scores', () => {
         const players: SessionPlayer[] = [
-            { user_id: 'p1', username: 'P1', session_score: 10, is_guest: false, avatar_color: '#fff' },
+            { id: 'p1', user_id: 'auth1', username: 'P1', session_score: 10, is_guest: false, avatar_color: '#fff' },
         ];
         const roundScores = { 'p2': 5 }; // p2 not in players
 
