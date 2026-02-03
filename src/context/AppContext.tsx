@@ -14,6 +14,7 @@ interface AppContextType {
     signUp: (email: string, password: string, username: string) => Promise<{ error: string | null }>;
     signOut: () => Promise<void>;
     continueAsGuest: (username: string) => void;
+    resetPassword: (email: string) => Promise<{ error: string | null }>;
 
     // Sessions
     sessions: Session[];
@@ -299,6 +300,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
     };
 
+    const resetPassword = async (email: string) => {
+        if (!supabase) {
+            return { error: 'Supabase is not configured.' };
+        }
+
+        try {
+            const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: `${window.location.origin}/auth/callback?type=recovery`
+            });
+            if (error) return { error: error.message };
+            return { error: null };
+        } catch (e) {
+            return { error: 'An unexpected error occurred' };
+        }
+    };
+
     const signOut = async () => {
         if (supabase && !isGuestMode) {
             await supabase.auth.signOut();
@@ -360,6 +377,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             signUp,
             signOut,
             continueAsGuest,
+            resetPassword,
             sessions,
             activeSession,
             createSession,

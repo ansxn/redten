@@ -5,9 +5,9 @@ import { useApp } from '@/context/AppContext';
 import { useRouter } from 'next/navigation';
 
 export default function Home() {
-  const { user, isLoading, signIn, signUp } = useApp();
+  const { user, isLoading, signIn, signUp, resetPassword } = useApp();
   const router = useRouter();
-  const [isSignUp, setIsSignUp] = useState(true); // Default to sign up
+  const [mode, setMode] = useState<'signup' | 'signin' | 'forgot'>('signup');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
@@ -28,7 +28,7 @@ export default function Home() {
     setLoading(true);
 
     try {
-      if (isSignUp) {
+      if (mode === 'signup') {
         if (!username.trim()) {
           setError('Username is required');
           setLoading(false);
@@ -44,9 +44,9 @@ export default function Home() {
           setError(error);
         } else {
           setSuccess('Account created! Check your email to confirm, then sign in.');
-          setIsSignUp(false);
+          setMode('signin');
         }
-      } else {
+      } else if (mode === 'signin') {
         if (!email.trim() || !password.trim()) {
           setError('Email and password are required');
           setLoading(false);
@@ -55,6 +55,18 @@ export default function Home() {
         const { error } = await signIn(email, password);
         if (error) {
           setError(error);
+        }
+      } else if (mode === 'forgot') {
+        if (!email.trim()) {
+          setError('Email is required');
+          setLoading(false);
+          return;
+        }
+        const { error } = await resetPassword(email);
+        if (error) {
+          setError(error);
+        } else {
+          setSuccess('Password reset email sent! Check your inbox.');
         }
       }
     } catch (e) {
@@ -91,7 +103,7 @@ export default function Home() {
       {/* Auth Panel */}
       <div className="panel w-full max-w-md animate-slide-up" style={{ animationDelay: '0.1s' }}>
         <form onSubmit={handleSubmit} className="flex flex-col gap-md">
-          {isSignUp && (
+          {mode === 'signup' && (
             <div>
               <label className="label">Username</label>
               <input
@@ -117,18 +129,20 @@ export default function Home() {
             />
           </div>
 
-          <div>
-            <label className="label">Password</label>
-            <input
-              type="password"
-              className="input"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              minLength={6}
-              required
-            />
-          </div>
+          {mode !== 'forgot' && (
+            <div>
+              <label className="label">Password</label>
+              <input
+                type="password"
+                className="input"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                minLength={6}
+                required
+              />
+            </div>
+          )}
 
           {error && (
             <div
@@ -159,28 +173,104 @@ export default function Home() {
             className="btn btn-primary w-full"
             disabled={loading}
           >
-            {loading ? 'Loading...' : isSignUp ? 'Create Account' : 'Sign In'}
+            {loading
+              ? 'Loading...'
+              : mode === 'signup'
+                ? 'Create Account'
+                : mode === 'signin'
+                  ? 'Sign In'
+                  : 'Send Reset Email'}
           </button>
 
-          <button
-            type="button"
-            className="text-center mt-2"
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-              textDecoration: 'underline',
-              fontSize: '0.9rem'
-            }}
-            onClick={() => {
-              setIsSignUp(!isSignUp);
-              setError('');
-              setSuccess('');
-            }}
-          >
-            {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Create one"}
-          </button>
+          {/* Mode switching buttons */}
+          <div className="flex flex-col gap-1">
+            {mode === 'signup' && (
+              <button
+                type="button"
+                className="text-center"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  fontSize: '0.9rem'
+                }}
+                onClick={() => {
+                  setMode('signin');
+                  setError('');
+                  setSuccess('');
+                }}
+              >
+                Already have an account? Sign in
+              </button>
+            )}
+
+            {mode === 'signin' && (
+              <>
+                <button
+                  type="button"
+                  className="text-center"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    fontSize: '0.9rem'
+                  }}
+                  onClick={() => {
+                    setMode('signup');
+                    setError('');
+                    setSuccess('');
+                  }}
+                >
+                  Don&apos;t have an account? Create one
+                </button>
+                <button
+                  type="button"
+                  className="text-center mt-1"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--accent-gold)',
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    fontSize: '0.85rem'
+                  }}
+                  onClick={() => {
+                    setMode('forgot');
+                    setError('');
+                    setSuccess('');
+                  }}
+                >
+                  Forgot your password?
+                </button>
+              </>
+            )}
+
+            {mode === 'forgot' && (
+              <button
+                type="button"
+                className="text-center"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  fontSize: '0.9rem'
+                }}
+                onClick={() => {
+                  setMode('signin');
+                  setError('');
+                  setSuccess('');
+                }}
+              >
+                Back to Sign In
+              </button>
+            )}
+          </div>
         </form>
       </div>
 
