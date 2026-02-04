@@ -393,8 +393,15 @@ export async function addRound(
         const won = pointsForPlayer > 0;
 
         // Calculate placement (1-6 based on finish_order, 0 if not found)
+        // Handle both old format (user_id in finish_order) and new format (player.id in finish_order)
         const finishOrder = roundData.finish_order || [];
-        const placementIndex = finishOrder.indexOf(player.id);
+        let placementIndex = finishOrder.indexOf(player.id);
+
+        // If not found by player.id, try looking up by user_id (for historical data)
+        if (placementIndex === -1 && player.user_id) {
+            placementIndex = finishOrder.indexOf(player.user_id);
+        }
+
         const placement = placementIndex >= 0 ? placementIndex + 1 : 0;
         const gotFirst = placement === 1;
 
