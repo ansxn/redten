@@ -619,7 +619,7 @@ export default function SessionPage() {
                                     </p>
                                     <div className="flex flex-wrap gap-2">
                                         {finishOrder.map((playerId, index) => {
-                                            const player = session.players.find(p => p.user_id === playerId);
+                                            const player = session.players.find(p => p.id === playerId);
                                             const isRed = selectedRedPlayers.includes(playerId);
                                             return (
                                                 <button
