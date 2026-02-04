@@ -175,7 +175,17 @@ export default function SessionPage() {
         if (editingRoundId) {
             // Update cloud
             if (!isGuestMode && user) {
+                console.log('=== EDIT ROUND START ===');
+                console.log('Session players BEFORE updateRound:', session.players.map(p => ({ id: p.id, user_id: p.user_id, score: p.session_score })));
+                console.log('Round data:', roundData);
+
                 const dbResult = await db.updateRound(sessionId, editingRoundId, roundData, session.players);
+
+                console.log('updateRound returned:', dbResult);
+                if (dbResult) {
+                    console.log('Updated players from DB:', dbResult.updatedPlayers.map(p => ({ id: p.id, user_id: p.user_id, score: p.session_score })));
+                }
+
                 if (dbResult) {
                     const updatedRounds = session.rounds.map(r =>
                         r.id === editingRoundId
@@ -189,10 +199,12 @@ export default function SessionPage() {
                         rounds: updatedRounds
                     };
 
+                    console.log('Setting updatedSession with players:', updatedSession.players.map(p => ({ id: p.id, score: p.session_score })));
                     updateSession(updatedSession);
                     setSession(updatedSession);
                     setEditingRoundId(null);
                     setPhase('lobby'); // Go back to lobby after edit
+                    console.log('=== EDIT ROUND COMPLETE ===');
                 }
             } else {
                 // Determine old scores to revert
