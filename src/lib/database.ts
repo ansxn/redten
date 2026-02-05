@@ -364,8 +364,22 @@ export async function addRound(
         points
     }));
 
+    console.log('Round points to insert:', JSON.stringify(pointsInserts, null, 2));
+
     if (pointsInserts.length > 0) {
-        await supabase.from('round_points').insert(pointsInserts);
+        const { data: insertedPoints, error: pointsError } = await supabase
+            .from('round_points')
+            .insert(pointsInserts)
+            .select();
+
+        if (pointsError) {
+            console.error('Error inserting round_points:', pointsError);
+            console.error('Attempted inserts:', pointsInserts);
+        } else {
+            console.log('Successfully inserted round_points:', insertedPoints?.length || 0, 'records');
+        }
+    } else {
+        console.log('No points to insert (wash round)');
     }
 
     // Update player scores in session_players table

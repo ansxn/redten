@@ -1,119 +1,121 @@
--- Migration: Recalculate ALL placement stats from scratch
--- This is a complete rebuild to fix inconsistent data
+-- COMPREHENSIVE STATS RECALCULATION
+-- This recalculates ALL user stats from scratch based on raw data
 
--- STEP 1: Debug - First, let's see what data we have
--- Check a sample of finish_order data to understand the ID format
-SELECT 
-    r.id as round_id,
-    r.finish_order,
-    array_length(r.finish_order, 1) as finish_order_length
-FROM rounds r
-WHERE r.finish_order IS NOT NULL
-AND array_length(r.finish_order, 1) > 0
-LIMIT 5;
-
--- STEP 2: Check session_players to see both id and user_id formats
-SELECT 
-    sp.id as session_player_id,
-    sp.user_id as auth_user_id,
-    sp.username
-FROM session_players sp
-WHERE sp.user_id IS NOT NULL
-LIMIT 5;
-
--- STEP 3: For each round, check if finish_order contains session_player.id or user_id
--- This will help us understand which format was used
-SELECT 
-    r.id as round_id,
-    p.username,
-    sp.id as session_player_id,
-    sp.user_id as auth_user_id,
-    CASE 
-        WHEN sp.id::text = ANY(r.finish_order) THEN 'Found by session_player.id'
-        WHEN sp.user_id::text = ANY(r.finish_order) THEN 'Found by user_id'
-        ELSE 'Not found'
-    END as match_type
-FROM rounds r
-JOIN sessions s ON r.session_id = s.id
-JOIN session_players sp ON sp.session_id = s.id
-JOIN profiles p ON p.id = sp.user_id
-WHERE r.finish_order IS NOT NULL
-AND array_length(r.finish_order, 1) > 0
-LIMIT 20;
-
--- STEP 4: Now calculate placements properly
--- Create a comprehensive view of all placements
-
--- First, reset stats
+-- STEP 1: Reset ALL stats to 0 first
 UPDATE user_stats
 SET 
+    total_rounds_played = 0,
+    rounds_won = 0,
+    lifetime_earnings = 0,
     total_placement_sum = 0,
     first_places = 0;
 
--- Calculate placements for each user from each round they participated in
-WITH round_placements AS (
+-- STEP 2: Recalculate total_rounds_played from round_points
+-- A user played a round if they have an entry in round_points
+-- Handle both old format (player_id = user_id) and new format (player_id = session_players.id)
+UPDATE user_stats us
+SET total_rounds_played = COALESCE((
+    SELECT COUNT(DISTINCT rp.round_id)
+    FROM round_points rp
+    LEFT JOIN session_players sp ON rp.player_id = sp.id
+    WHERE rp.player_id = us.user_id  -- Old format: player_id IS the user_id (UUID = UUID)
+       OR sp.user_id = us.user_id    -- New format: player_id is session_players.id
+), 0);
+
+-- STEP 3: Recalculate rounds_won (rounds where points > 0)
+UPDATE user_stats us
+SET rounds_won = COALESCE((
+    SELECT COUNT(*)
+    FROM round_points rp
+    LEFT JOIN session_players sp ON rp.player_id = sp.id
+    WHERE (rp.player_id = us.user_id OR sp.user_id = us.user_id)
+    AND rp.points > 0
+), 0);
+
+-- STEP 4: Recalculate lifetime_earnings (sum of all points)
+UPDATE user_stats us
+SET lifetime_earnings = COALESCE((
+    SELECT SUM(rp.points)
+    FROM round_points rp
+    LEFT JOIN session_players sp ON rp.player_id = sp.id
+    WHERE rp.player_id = us.user_id OR sp.user_id = us.user_id
+), 0);
+
+-- STEP 5: Recalculate placements
+-- We need to find the user in each round's finish_order
+-- finish_order might contain either session_players.id OR user_id (both as text)
+WITH user_placements AS (
     SELECT 
-        sp.user_id,
+        us.user_id,
         r.id as round_id,
+        -- Find position in finish_order
         COALESCE(
-            -- Try to find position by session_players.id
+            -- Try user_id directly in finish_order (old format)
             (
                 SELECT t.pos::int
                 FROM unnest(r.finish_order) WITH ORDINALITY AS t(player_id, pos)
-                WHERE t.player_id = sp.id::text
+                WHERE t.player_id = us.user_id::text
                 LIMIT 1
             ),
-            -- Fallback: Try to find position by user_id
+            -- Try session_players.id in finish_order (new format) 
             (
                 SELECT t.pos::int
                 FROM unnest(r.finish_order) WITH ORDINALITY AS t(player_id, pos)
-                WHERE t.player_id = sp.user_id::text
+                WHERE t.player_id IN (
+                    SELECT sp.id::text 
+                    FROM session_players sp 
+                    WHERE sp.user_id = us.user_id 
+                    AND sp.session_id = r.session_id
+                )
                 LIMIT 1
             ),
-            0
+            0  -- Not found
         ) as placement
-    FROM session_players sp
-    JOIN sessions s ON sp.session_id = s.id
-    JOIN rounds r ON r.session_id = s.id
-    WHERE sp.user_id IS NOT NULL
-    AND r.finish_order IS NOT NULL
+    FROM user_stats us
+    CROSS JOIN rounds r
+    WHERE r.finish_order IS NOT NULL
     AND array_length(r.finish_order, 1) > 0
+    -- Only include rounds where this user actually participated (has round_points)
+    AND EXISTS (
+        SELECT 1 FROM round_points rp
+        LEFT JOIN session_players sp ON rp.player_id = sp.id
+        WHERE rp.round_id = r.id
+        AND (rp.player_id = us.user_id OR sp.user_id = us.user_id)
+    )
 ),
-user_aggregates AS (
+placement_aggregates AS (
     SELECT 
         user_id,
         SUM(CASE WHEN placement BETWEEN 1 AND 6 THEN placement ELSE 0 END) as total_placement,
-        COUNT(*) FILTER (WHERE placement = 1) as first_count,
-        COUNT(*) FILTER (WHERE placement BETWEEN 1 AND 6) as rounds_with_placement
-    FROM round_placements
+        COUNT(*) FILTER (WHERE placement = 1) as first_count
+    FROM user_placements
     GROUP BY user_id
 )
 UPDATE user_stats us
 SET 
-    total_placement_sum = COALESCE(ua.total_placement, 0),
-    first_places = COALESCE(ua.first_count, 0)
-FROM user_aggregates ua
-WHERE us.user_id = ua.user_id;
+    total_placement_sum = COALESCE(pa.total_placement, 0),
+    first_places = COALESCE(pa.first_count, 0)
+FROM placement_aggregates pa
+WHERE us.user_id = pa.user_id;
 
--- STEP 5: Verify results
+-- STEP 6: Final verification
 SELECT 
     p.username,
     us.total_rounds_played,
+    us.rounds_won,
+    us.lifetime_earnings,
     us.total_placement_sum,
     us.first_places,
     CASE 
         WHEN us.total_rounds_played > 0 
         THEN ROUND(us.total_placement_sum::numeric / us.total_rounds_played, 2) 
-        ELSE 0 
+        ELSE NULL 
     END as avg_placement,
     CASE 
+        WHEN us.total_rounds_played > 0 AND us.total_placement_sum = 0 THEN 'WARNING: no placements'
+        WHEN us.total_rounds_played = 0 AND us.total_placement_sum > 0 THEN 'ERROR: orphaned placements'
         WHEN us.total_rounds_played > 0 AND 
-             (us.total_placement_sum::numeric / us.total_rounds_played) > 6 
-        THEN 'ERROR: avg > 6'
-        WHEN us.total_rounds_played > 0 AND us.total_placement_sum = 0
-        THEN 'WARNING: rounds but no placements'
-        WHEN us.total_rounds_played = 0 AND us.total_placement_sum > 0
-        THEN 'WARNING: placements but no rounds'
+             (us.total_placement_sum::numeric / us.total_rounds_played) > 6 THEN 'ERROR: avg > 6'
         ELSE 'OK'
     END as status
 FROM user_stats us
