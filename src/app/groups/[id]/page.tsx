@@ -259,7 +259,7 @@ export default function GroupDetailPage() {
                                             </div>
 
                                             {/* Stats Grid */}
-                                            <div className="flex-1 grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-4 text-center md:text-right">
+                                            <div className="flex-1 leaderboard-stats md:text-right">
                                                 <div>
                                                     <div className="font-bold" style={{
                                                         color: member.lifetime_earnings >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'

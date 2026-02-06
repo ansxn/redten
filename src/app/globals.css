@@ -324,6 +324,9 @@ h6 {
 .player-avatar {
   width: 48px;
   height: 48px;
+  min-width: 48px;
+  min-height: 48px;
+  flex-shrink: 0;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--accent-purple) 0%, var(--accent-red) 100%);
   display: flex;
@@ -334,6 +337,8 @@ h6 {
   color: white;
   text-transform: uppercase;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  background-size: cover;
+  background-position: center;
 }
 
 .player-score {
@@ -566,8 +571,20 @@ h6 {
 
 .grid-players {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 1rem;
+}
+
+/* Leaderboard stats alignment */
+.leaderboard-stats {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 1rem;
+  text-align: center;
+}
+
+.leaderboard-stats>div {
+  min-width: 60px;
 }
 
 .flex-center {
@@ -665,8 +682,13 @@ h6 {
 
   /* Grid adjustments */
   .grid-players {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
     gap: 0.75rem;
+  }
+
+  .leaderboard-stats {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
   }
 
   /* Stats card adjustments */

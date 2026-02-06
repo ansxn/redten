@@ -1,12 +1,12 @@
--- FIX: Recalculate ALL users' lifetime_earnings from actual session data
--- The bug was: lifetime_earnings was being updated with raw points instead of points * point_value
+-- FIX NOW: Recalculate ALL users' lifetime_earnings correctly
+-- Run this entire file - it will fix everyone
 
--- First, check what the correct values should be
+-- First show the preview
 SELECT 
     p.username,
-    us.lifetime_earnings as current_stored,
-    COALESCE(SUM(sp.session_score * s.point_value), 0) as correct_value,
-    us.lifetime_earnings - COALESCE(SUM(sp.session_score * s.point_value), 0) as difference
+    us.lifetime_earnings as before_fix,
+    COALESCE(SUM(sp.session_score * s.point_value), 0) as after_fix,
+    us.lifetime_earnings - COALESCE(SUM(sp.session_score * s.point_value), 0) as was_off_by
 FROM profiles p
 JOIN user_stats us ON us.user_id = p.id
 LEFT JOIN session_players sp ON sp.user_id = p.id
@@ -14,7 +14,7 @@ LEFT JOIN sessions s ON s.id = sp.session_id
 GROUP BY p.username, us.lifetime_earnings
 ORDER BY ABS(us.lifetime_earnings - COALESCE(SUM(sp.session_score * s.point_value), 0)) DESC;
 
--- Apply the fix to ALL users
+-- APPLY THE FIX
 UPDATE user_stats 
 SET lifetime_earnings = (
     SELECT COALESCE(SUM(sp.session_score * s.point_value), 0)
@@ -23,10 +23,15 @@ SET lifetime_earnings = (
     WHERE sp.user_id = user_stats.user_id
 );
 
--- Verify the fix
+-- Verify everyone is fixed (all should show 0 difference)
 SELECT 
     p.username,
-    us.lifetime_earnings as fixed_earnings
+    us.lifetime_earnings as fixed_value,
+    COALESCE(SUM(sp.session_score * s.point_value), 0) as calculated,
+    us.lifetime_earnings - COALESCE(SUM(sp.session_score * s.point_value), 0) as difference
 FROM profiles p
 JOIN user_stats us ON us.user_id = p.id
-ORDER BY us.lifetime_earnings DESC;
+LEFT JOIN session_players sp ON sp.user_id = p.id
+LEFT JOIN sessions s ON s.id = sp.session_id
+GROUP BY p.username, us.lifetime_earnings
+ORDER BY p.username;

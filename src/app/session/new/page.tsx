@@ -33,6 +33,7 @@ export default function NewSession() {
     const [isCreating, setIsCreating] = useState(false);
     const [isLoadingFriends, setIsLoadingFriends] = useState(true);
     const [addingFriendId, setAddingFriendId] = useState<string | null>(null);
+    const [showAllFriends, setShowAllFriends] = useState(false);
 
     // Load friends list
     useEffect(() => {
@@ -392,7 +393,7 @@ export default function NewSession() {
                     <section className="panel mb-6 animate-slide-up" style={{ animationDelay: '0.25s' }}>
                         <div className="panel-header">Quick Add Friends</div>
                         <div className="flex flex-wrap gap-sm">
-                            {availableFriends.slice(0, 5).map(friend => (
+                            {(showAllFriends ? availableFriends : availableFriends.slice(0, 5)).map(friend => (
                                 <button
                                     key={friend.id}
                                     className="btn btn-secondary"
@@ -403,9 +404,13 @@ export default function NewSession() {
                                 </button>
                             ))}
                             {availableFriends.length > 5 && (
-                                <span style={{ color: 'var(--text-muted)', alignSelf: 'center' }}>
-                                    +{availableFriends.length - 5} more
-                                </span>
+                                <button
+                                    onClick={() => setShowAllFriends(!showAllFriends)}
+                                    className="btn btn-ghost"
+                                    style={{ fontSize: '0.875rem' }}
+                                >
+                                    {showAllFriends ? 'Show less' : `+${availableFriends.length - 5} more`}
+                                </button>
                             )}
                         </div>
                     </section>
