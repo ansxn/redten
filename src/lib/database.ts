@@ -321,13 +321,21 @@ export async function addRound(
     const scores = calculateRoundScores(roundData, players);
     const updatedPlayers = applyRoundScores(players, scores);
 
-    // Get current round count
+    // Get current round count and session point_value
     const { count } = await supabase
         .from('rounds')
         .select('*', { count: 'exact', head: true })
         .eq('session_id', sessionId);
 
     const roundNumber = (count || 0) + 1;
+
+    // Get session point_value for converting points to dollars
+    const { data: sessionData } = await supabase
+        .from('sessions')
+        .select('point_value')
+        .eq('id', sessionId)
+        .single();
+    const pointValue = sessionData?.point_value || 1;
 
     // Create round
     const { data: roundDbData, error: roundError } = await supabase
@@ -429,7 +437,7 @@ export async function addRound(
                 rounds_won: currentStats.rounds_won + (won ? 1 : 0),
                 first_places: (currentStats.first_places || 0) + (gotFirst ? 1 : 0),
                 total_placement_sum: (currentStats.total_placement_sum || 0) + placement,
-                lifetime_earnings: (currentStats.lifetime_earnings || 0) + pointsForPlayer
+                lifetime_earnings: (currentStats.lifetime_earnings || 0) + (pointsForPlayer * pointValue)
             });
         } else {
             // Create new stats row via upsert
@@ -437,7 +445,7 @@ export async function addRound(
                 user_id: sessionPlayer.user_id,
                 total_rounds_played: 1,
                 rounds_won: won ? 1 : 0,
-                lifetime_earnings: pointsForPlayer,  // Start with this round's points
+                lifetime_earnings: pointsForPlayer * pointValue,  // Start with this round's points (in dollars)
                 sessions_played: 0,
                 best_session: 0,
                 worst_session: 0,
