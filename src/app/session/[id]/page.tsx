@@ -891,27 +891,59 @@ export default function SessionPage() {
                         <div className="panel mt-4">
                             <div className="panel-header">Scores</div>
                             <div className="flex flex-col gap-sm">
-                                {[...session.players]
-                                    .sort((a, b) => b.session_score - a.session_score)
-                                    .map(player => (
-                                        <div key={player.id} className="flex justify-between items-center">
-                                            {player.is_guest ? (
-                                                <span>{player.username}</span>
-                                            ) : (
-                                                <Link
-                                                    href={`/profile/${player.user_id || ''}`}
-                                                    className="hover:underline decoration-dotted underline-offset-4"
-                                                >
-                                                    {player.username}
-                                                </Link>
-                                            )}
-                                            <span className={`font-bold font-mono ${player.session_score > 0 ? 'text-green-400' :
-                                                player.session_score < 0 ? 'text-red-400' : ''
-                                                }`}>
-                                                {formatPoints(player.session_score)}
-                                            </span>
-                                        </div>
-                                    ))}
+                                {(() => {
+                                    // Recalculate scores from round data to ensure accuracy
+                                    // and de-duplicate players by user_id
+                                    const scoreMap = new Map<string, { username: string; score: number; user_id: string | null; is_guest: boolean }>();
+
+                                    for (const player of session.players) {
+                                        const key = player.user_id || player.id;
+                                        if (!scoreMap.has(key)) {
+                                            scoreMap.set(key, {
+                                                username: player.username,
+                                                score: 0,
+                                                user_id: player.user_id,
+                                                is_guest: player.is_guest
+                                            });
+                                        }
+                                    }
+
+                                    // Sum points from all rounds
+                                    for (const round of session.rounds) {
+                                        if (!round.points_awarded) continue;
+                                        for (const [playerId, points] of Object.entries(round.points_awarded)) {
+                                            // Find the player to get their user_id key
+                                            const player = session.players.find(p => p.id === playerId);
+                                            const key = player ? (player.user_id || player.id) : playerId;
+                                            const entry = scoreMap.get(key);
+                                            if (entry) {
+                                                entry.score += points;
+                                            }
+                                        }
+                                    }
+
+                                    return [...scoreMap.values()]
+                                        .sort((a, b) => b.score - a.score)
+                                        .map(entry => (
+                                            <div key={entry.user_id || entry.username} className="flex justify-between items-center">
+                                                {entry.is_guest ? (
+                                                    <span>{entry.username}</span>
+                                                ) : (
+                                                    <Link
+                                                        href={`/profile/${entry.user_id || ''}`}
+                                                        className="hover:underline decoration-dotted underline-offset-4"
+                                                    >
+                                                        {entry.username}
+                                                    </Link>
+                                                )}
+                                                <span className={`font-bold font-mono ${entry.score > 0 ? 'text-green-400' :
+                                                    entry.score < 0 ? 'text-red-400' : ''
+                                                    }`}>
+                                                    {formatPoints(entry.score)}
+                                                </span>
+                                            </div>
+                                        ));
+                                })()}
                             </div>
                         </div>
                     </div>

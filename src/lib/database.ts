@@ -230,7 +230,7 @@ export async function getSession(sessionId: string): Promise<Session | null> {
     // Convert to our types
     // id = session_players row ID (for gameplay, round_points, finish_order)
     // user_id = auth user ID from profiles (for stats, null for guests)
-    const sessionPlayers: SessionPlayer[] = playersData.map(p => ({
+    const rawPlayers: SessionPlayer[] = playersData.map(p => ({
         id: p.id,  // session_players row ID - THE gameplay identifier
         user_id: p.user_id || null,  // auth user ID for stats lookup
         username: p.username,
@@ -238,6 +238,22 @@ export async function getSession(sessionId: string): Promise<Session | null> {
         is_guest: p.is_guest,
         avatar_color: p.avatar_color
     }));
+
+    // De-duplicate players: if same user_id appears multiple times, merge them
+    // Keep the entry with the most round_points references, sum their scores
+    const playerMap = new Map<string, SessionPlayer>();
+    for (const p of rawPlayers) {
+        const key = p.user_id || p.id; // guests use their row id as key
+        const existing = playerMap.get(key);
+        if (existing) {
+            // Keep the one with the higher absolute score (more activity)
+            // and sum scores from duplicate rows
+            existing.session_score += p.session_score;
+        } else {
+            playerMap.set(key, { ...p });
+        }
+    }
+    const sessionPlayers = Array.from(playerMap.values());
 
     const rounds: Round[] = (roundsData || []).map(r => ({
         id: r.id,

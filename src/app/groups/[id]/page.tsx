@@ -224,21 +224,22 @@ export default function GroupDetailPage() {
                                             background: isMe ? 'rgba(244, 196, 48, 0.1)' : undefined
                                         }}
                                     >
-                                        <div className="flex flex-col md:flex-row md:items-center gap-3">
-                                            {/* Rank & Avatar */}
-                                            <div className="flex items-center gap-3">
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                            {/* Rank & Avatar - fixed width */}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', width: '200px', minWidth: '200px', flexShrink: 0 }}>
                                                 <span
                                                     className="font-bold text-xl"
                                                     style={{
                                                         color: index === 0 ? 'var(--accent-gold)' :
                                                             index === 1 ? '#c0c0c0' :
                                                                 index === 2 ? '#cd7f32' : 'var(--text-muted)',
-                                                        width: '2rem'
+                                                        width: '2rem',
+                                                        flexShrink: 0
                                                     }}
                                                 >
                                                     #{index + 1}
                                                 </span>
-                                                <Link href={`/profile/${member.user_id}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+                                                <Link href={`/profile/${member.user_id}`} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', overflow: 'hidden' }} className="hover:opacity-80 transition-opacity">
                                                     <div
                                                         className="player-avatar"
                                                         style={{
@@ -246,20 +247,22 @@ export default function GroupDetailPage() {
                                                                 ? `url(${member.avatar_url}) center/cover`
                                                                 : member.avatar_color,
                                                             width: 40,
-                                                            height: 40
+                                                            height: 40,
+                                                            minWidth: 40,
+                                                            flexShrink: 0
                                                         }}
                                                     >
                                                         {!member.avatar_url && member.username.charAt(0)}
                                                     </div>
-                                                    <span className="font-bold">
+                                                    <span className="font-bold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                         {member.username}
                                                         {isMe && <span style={{ color: 'var(--accent-gold)' }}> (You)</span>}
                                                     </span>
                                                 </Link>
                                             </div>
 
-                                            {/* Stats Grid */}
-                                            <div className="flex-1 leaderboard-stats md:text-right">
+                                            {/* Stats Grid - fills remaining space */}
+                                            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.5rem', textAlign: 'center' }}>
                                                 <div>
                                                     <div className="font-bold" style={{
                                                         color: member.lifetime_earnings >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'
