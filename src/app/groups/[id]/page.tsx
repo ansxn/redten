@@ -6,8 +6,9 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getGroup, getGroupLeaderboard, updateGroup, leaveGroup, Group, LeaderboardEntry } from '@/lib/groups';
 import { formatMoney } from '@/lib/scoring';
+import Avatar from '@/components/Avatar';
 
-type SortField = 'lifetime_earnings' | 'win_rate' | 'total_rounds_played' | 'rounds_won' | 'rounds_lost' | 'sessions_played';
+type SortField = 'lifetime_earnings' | 'win_rate' | 'total_rounds_played' | 'rounds_won' | 'rounds_lost' | 'avg_placement';
 
 export default function GroupDetailPage() {
     const params = useParams();
@@ -63,13 +64,21 @@ export default function GroupDetailPage() {
             setSortAsc(!sortAsc);
         } else {
             setSortBy(field);
-            setSortAsc(false);
+            // Default sort directions: lower is better for avg_placement, higher is better for everything else
+            setSortAsc(field === 'avg_placement' ? true : false);
         }
     };
 
     const sortedLeaderboard = [...leaderboard].sort((a, b) => {
-        const aVal = a[sortBy];
-        const bVal = b[sortBy];
+        let aVal = a[sortBy];
+        let bVal = b[sortBy];
+
+        // For avg_placement, treat 0 (no rounds) as worst
+        if (sortBy === 'avg_placement') {
+            if (a.total_rounds_played === 0) aVal = 99;
+            if (b.total_rounds_played === 0) bVal = 99;
+        }
+
         return sortAsc ? (aVal - bVal) : (bVal - aVal);
     });
 
@@ -112,6 +121,42 @@ export default function GroupDetailPage() {
         }
     };
 
+    // Helper to get the stat value and color for a given field
+    const getStatDisplay = (member: LeaderboardEntry, field: SortField): { value: string; color: string } => {
+        switch (field) {
+            case 'lifetime_earnings':
+                return {
+                    value: formatMoney(member.lifetime_earnings),
+                    color: member.lifetime_earnings >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'
+                };
+            case 'win_rate':
+                return { value: `${member.win_rate.toFixed(1)}%`, color: 'var(--accent-gold)' };
+            case 'total_rounds_played':
+                return { value: `${member.total_rounds_played}`, color: 'var(--accent-purple)' };
+            case 'rounds_won':
+                return { value: `${member.rounds_won}`, color: 'var(--accent-green)' };
+            case 'rounds_lost':
+                return { value: `${member.rounds_lost}`, color: 'var(--accent-red)' };
+            case 'avg_placement':
+                return {
+                    value: member.total_rounds_played > 0 ? member.avg_placement.toFixed(1) : '-',
+                    color: 'var(--text-secondary)'
+                };
+        }
+    };
+
+    // Get the label for a sort field
+    const getSortLabel = (field: SortField): string => {
+        switch (field) {
+            case 'lifetime_earnings': return 'Earnings';
+            case 'win_rate': return 'Win Rate';
+            case 'total_rounds_played': return 'Rounds';
+            case 'rounds_won': return 'Wins';
+            case 'rounds_lost': return 'Losses';
+            case 'avg_placement': return 'Avg Place';
+        }
+    };
+
     if (isLoading || isLoadingData) {
         return (
             <div className="min-h-screen flex-center">
@@ -132,6 +177,16 @@ export default function GroupDetailPage() {
     }
 
     const isCreator = group.created_by === user.id;
+
+    // Sort config
+    const sortOptions: { field: SortField; label: string; emoji: string }[] = [
+        { field: 'lifetime_earnings', label: 'Earnings', emoji: '💰' },
+        { field: 'win_rate', label: 'Win Rate', emoji: '📊' },
+        { field: 'avg_placement', label: 'Avg Place', emoji: '🎯' },
+        { field: 'total_rounds_played', label: 'Rounds', emoji: '🎮' },
+        { field: 'rounds_won', label: 'Wins', emoji: '🏆' },
+        { field: 'rounds_lost', label: 'Losses', emoji: '❌' },
+    ];
 
     return (
         <main className="min-h-screen p-4 md:p-8">
@@ -186,21 +241,15 @@ export default function GroupDetailPage() {
 
                 {/* Sort Buttons */}
                 <div className="mb-4 flex flex-wrap gap-2">
-                    <span style={{ color: 'var(--text-muted)', lineHeight: '2.5rem' }}>Sort by:</span>
-                    {[
-                        { field: 'lifetime_earnings' as SortField, label: '💰 Earnings' },
-                        { field: 'win_rate' as SortField, label: '📊 Win Rate' },
-                        { field: 'total_rounds_played' as SortField, label: '🎮 Rounds' },
-                        { field: 'rounds_won' as SortField, label: '🏆 Wins' },
-                        { field: 'rounds_lost' as SortField, label: '❌ Losses' },
-                    ].map(({ field, label }) => (
+                    <span style={{ color: 'var(--text-muted)', lineHeight: '2.5rem', fontSize: '1rem' }}>Sort:</span>
+                    {sortOptions.map(({ field, label, emoji }) => (
                         <button
                             key={field}
                             onClick={() => handleSort(field)}
                             className={`btn ${sortBy === field ? 'btn-primary' : 'btn-secondary'}`}
-                            style={{ fontSize: '0.75rem', padding: '0.5rem 0.75rem' }}
+                            style={{ fontSize: '0.7rem', padding: '0.4rem 0.6rem' }}
                         >
-                            {label} {sortBy === field && (sortAsc ? '↑' : '↓')}
+                            {emoji} {label} {sortBy === field && (sortAsc ? '↑' : '↓')}
                         </button>
                     ))}
                 </div>
@@ -215,87 +264,144 @@ export default function GroupDetailPage() {
                         <div className="flex flex-col gap-sm">
                             {sortedLeaderboard.map((member, index) => {
                                 const isMe = member.user_id === user.id;
+                                const primaryStat = getStatDisplay(member, sortBy);
+
                                 return (
                                     <div
                                         key={member.id}
                                         className="player-card"
                                         style={{
                                             borderColor: isMe ? 'var(--accent-gold)' : undefined,
-                                            background: isMe ? 'rgba(244, 196, 48, 0.1)' : undefined
+                                            background: isMe ? 'rgba(244, 196, 48, 0.08)' : undefined,
+                                            cursor: 'default'
                                         }}
                                     >
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                            {/* Rank & Avatar - fixed width */}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', width: '200px', minWidth: '200px', flexShrink: 0 }}>
+                                            {/* Rank */}
+                                            <span
+                                                className="font-bold"
+                                                style={{
+                                                    color: index === 0 ? 'var(--accent-gold)' :
+                                                        index === 1 ? '#c0c0c0' :
+                                                            index === 2 ? '#cd7f32' : 'var(--text-muted)',
+                                                    width: '1.75rem',
+                                                    flexShrink: 0,
+                                                    fontSize: '1.1rem',
+                                                    textAlign: 'center'
+                                                }}
+                                            >
+                                                {index + 1}
+                                            </span>
+
+                                            {/* Avatar + Name */}
+                                            <Link
+                                                href={`/profile/${member.user_id}`}
+                                                className="hover:opacity-80 transition-opacity"
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.6rem',
+                                                    flex: 1,
+                                                    minWidth: 0,
+                                                    overflow: 'hidden'
+                                                }}
+                                            >
+                                                <Avatar
+                                                    userId={member.user_id}
+                                                    username={member.username}
+                                                    avatarColor={member.avatar_color}
+                                                    size={12}
+                                                    fontSize="0.35rem"
+                                                />
                                                 <span
-                                                    className="font-bold text-xl"
+                                                    className="font-bold"
                                                     style={{
-                                                        color: index === 0 ? 'var(--accent-gold)' :
-                                                            index === 1 ? '#c0c0c0' :
-                                                                index === 2 ? '#cd7f32' : 'var(--text-muted)',
-                                                        width: '2rem',
-                                                        flexShrink: 0
+                                                        overflow: 'hidden',
+                                                        textOverflow: 'ellipsis',
+                                                        whiteSpace: 'nowrap',
+                                                        fontSize: '0.8rem'
                                                     }}
                                                 >
-                                                    #{index + 1}
+                                                    {member.username}
+                                                    {isMe && <span style={{ color: 'var(--accent-gold)', fontSize: '0.65rem' }}> (You)</span>}
                                                 </span>
-                                                <Link href={`/profile/${member.user_id}`} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', overflow: 'hidden' }} className="hover:opacity-80 transition-opacity">
-                                                    <div
-                                                        className="player-avatar"
-                                                        style={{
-                                                            background: member.avatar_url
-                                                                ? `url(${member.avatar_url}) center/cover`
-                                                                : member.avatar_color,
-                                                            width: 40,
-                                                            height: 40,
-                                                            minWidth: 40,
-                                                            flexShrink: 0
-                                                        }}
-                                                    >
-                                                        {!member.avatar_url && member.username.charAt(0)}
-                                                    </div>
-                                                    <span className="font-bold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                        {member.username}
-                                                        {isMe && <span style={{ color: 'var(--accent-gold)' }}> (You)</span>}
-                                                    </span>
-                                                </Link>
-                                            </div>
+                                            </Link>
 
-                                            {/* Stats Grid - fills remaining space */}
-                                            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.5rem', textAlign: 'center' }}>
+                                            {/* Primary stat (currently sorted by) - always visible */}
+                                            <div style={{ textAlign: 'right', flexShrink: 0, minWidth: '3.5rem' }}>
+                                                <div
+                                                    className="font-bold font-mono"
+                                                    style={{ color: primaryStat.color, fontSize: '0.85rem' }}
+                                                >
+                                                    {primaryStat.value}
+                                                </div>
+                                                <div style={{ color: 'var(--text-muted)', fontSize: '0.55rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                    {getSortLabel(sortBy)}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Secondary stats row */}
+                                        <div style={{
+                                            display: 'grid',
+                                            gridTemplateColumns: 'repeat(5, 1fr)',
+                                            gap: '0.5rem',
+                                            marginTop: '0.5rem',
+                                            paddingTop: '0.5rem',
+                                            borderTop: '1px solid var(--border-color)',
+                                            textAlign: 'center'
+                                        }}>
+                                            {sortBy !== 'lifetime_earnings' && (
                                                 <div>
-                                                    <div className="font-bold" style={{
-                                                        color: member.lifetime_earnings >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'
+                                                    <div className="font-bold font-mono" style={{
+                                                        color: member.lifetime_earnings >= 0 ? 'var(--accent-green)' : 'var(--accent-red)',
+                                                        fontSize: '1rem'
                                                     }}>
                                                         {formatMoney(member.lifetime_earnings)}
                                                     </div>
-                                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.625rem' }}>Earnings</div>
+                                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>Earnings</div>
                                                 </div>
+                                            )}
+                                            {sortBy !== 'win_rate' && (
                                                 <div>
-                                                    <div className="font-bold" style={{ color: 'var(--accent-gold)' }}>
-                                                        {member.win_rate.toFixed(1)}%
+                                                    <div className="font-bold font-mono" style={{ color: 'var(--accent-gold)', fontSize: '1rem' }}>
+                                                        {member.win_rate.toFixed(0)}%
                                                     </div>
-                                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.625rem' }}>Win Rate</div>
+                                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>Win Rate</div>
                                                 </div>
+                                            )}
+                                            {sortBy !== 'avg_placement' && (
                                                 <div>
-                                                    <div className="font-bold" style={{ color: 'var(--accent-purple)' }}>
+                                                    <div className="font-bold font-mono" style={{ color: 'var(--text-secondary)', fontSize: '1rem' }}>
+                                                        {member.total_rounds_played > 0 ? member.avg_placement.toFixed(1) : '-'}
+                                                    </div>
+                                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>Avg Place</div>
+                                                </div>
+                                            )}
+                                            {sortBy !== 'total_rounds_played' && (
+                                                <div>
+                                                    <div className="font-bold font-mono" style={{ color: 'var(--accent-purple)', fontSize: '1rem' }}>
                                                         {member.total_rounds_played}
                                                     </div>
-                                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.625rem' }}>Rounds</div>
+                                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>Rounds</div>
                                                 </div>
+                                            )}
+                                            {sortBy !== 'rounds_won' && (
                                                 <div>
-                                                    <div className="font-bold" style={{ color: 'var(--accent-green)' }}>
+                                                    <div className="font-bold font-mono" style={{ color: 'var(--accent-green)', fontSize: '1rem' }}>
                                                         {member.rounds_won}
                                                     </div>
-                                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.625rem' }}>Wins</div>
+                                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>Wins</div>
                                                 </div>
+                                            )}
+                                            {sortBy !== 'rounds_lost' && (
                                                 <div>
-                                                    <div className="font-bold" style={{ color: 'var(--accent-red)' }}>
+                                                    <div className="font-bold font-mono" style={{ color: 'var(--accent-red)', fontSize: '1rem' }}>
                                                         {member.rounds_lost}
                                                     </div>
-                                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.625rem' }}>Losses</div>
+                                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>Losses</div>
                                                 </div>
-                                            </div>
+                                            )}
                                         </div>
                                     </div>
                                 );

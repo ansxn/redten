@@ -34,6 +34,8 @@ export interface GroupMember {
 export interface LeaderboardEntry extends GroupMember {
     win_rate: number;
     rounds_lost: number;
+    avg_placement: number;
+    total_placement_sum: number;
 }
 
 // Generate a random invite code
@@ -293,7 +295,7 @@ export async function getGroupLeaderboard(groupId: string): Promise<LeaderboardE
     // Fetch stats
     const { data: stats } = await supabase
         .from('user_stats')
-        .select('user_id, total_rounds_played, rounds_won, lifetime_earnings, sessions_played')
+        .select('user_id, total_rounds_played, rounds_won, lifetime_earnings, sessions_played, total_placement_sum')
         .in('user_id', userIds);
 
     // Create lookup maps
@@ -320,7 +322,9 @@ export async function getGroupLeaderboard(groupId: string): Promise<LeaderboardE
             rounds_lost: totalRounds - roundsWon,
             lifetime_earnings: Number(stat?.lifetime_earnings) || 0,
             sessions_played: stat?.sessions_played || 0,
-            win_rate: winRate
+            win_rate: winRate,
+            total_placement_sum: stat?.total_placement_sum || 0,
+            avg_placement: totalRounds > 0 ? (stat?.total_placement_sum || 0) / totalRounds : 0
         };
     });
 }

@@ -104,7 +104,7 @@ export default function Dashboard() {
 
                 {/* Quick Actions */}
                 <section className="mb-8 animate-slide-up" style={{ animationDelay: '0.1s' }}>
-                    <Link href="/session/new" className="btn btn-primary text-xl py-4 px-8">
+                    <Link href="/session/new" className="btn btn-primary btn-cta-glow text-xl py-4 px-8">
                         + Start New Session
                     </Link>
                 </section>

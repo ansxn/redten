@@ -443,6 +443,7 @@ export default function SessionPage() {
     };
 
     const handleEndSession = async () => {
+        if (!confirm('End this session? Final payouts will be calculated and the session will be marked complete.')) return;
         if (session.status !== 'completed') {
             await endSession(sessionId);
         }
@@ -547,25 +548,21 @@ export default function SessionPage() {
                         {/* Teams Phase - Select Red 10 Holders */}
                         {phase === 'teams' && (
                             <div className="panel animate-slide-up">
-                                <div className="panel-header">
-                                    Step 1: Select Red 10 Holders
+                                {/* Step Progress */}
+                                <div className="flex items-center justify-center gap-3 mb-4">
+                                    <div className="flex items-center gap-2">
+                                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--accent-gold)' }} />
+                                        <span style={{ fontSize: '0.75rem', color: 'var(--accent-gold)', fontWeight: 700 }}>Teams</span>
+                                    </div>
+                                    <div style={{ width: 24, height: 2, background: 'var(--border-color)' }} />
+                                    <div className="flex items-center gap-2">
+                                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--border-color)' }} />
+                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Placements</span>
+                                    </div>
                                 </div>
 
-                                {/* Multiplier Controls */}
-                                <div className="flex gap-sm md:gap-md mb-6 flex-wrap">
-                                    <button
-                                        onClick={handleCall}
-                                        className={`btn flex-1 ${multiplier >= 2 ? 'btn-call' : 'btn-secondary'}`}
-                                    >
-                                        {multiplier >= 2 ? '✓ Called' : 'Call (2×)'}
-                                    </button>
-                                    <button
-                                        onClick={handleDoubleCall}
-                                        disabled={multiplier === 1}
-                                        className={`btn flex-1 ${multiplier === 4 ? 'btn-double' : multiplier === 1 ? 'btn-secondary opacity-50' : 'btn-secondary'}`}
-                                    >
-                                        {multiplier === 4 ? '✓ Double' : 'Double (4×)'}
-                                    </button>
+                                <div className="panel-header">
+                                    Select Red 10 Holders
                                 </div>
 
                                 {/* Red Team Selection */}
@@ -620,9 +617,48 @@ export default function SessionPage() {
                         {/* Finish Order Phase */}
                         {phase === 'finish_order' && (
                             <div className="panel animate-slide-up">
-                                <div className="panel-header">
-                                    Step 2: Tap Players in Finish Order (1st → 6th)
+                                {/* Step Progress */}
+                                <div className="flex items-center justify-center gap-3 mb-4">
+                                    <div className="flex items-center gap-2">
+                                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--accent-green)' }} />
+                                        <span style={{ fontSize: '0.75rem', color: 'var(--accent-green)', fontWeight: 700 }}>Teams ✓</span>
+                                    </div>
+                                    <div style={{ width: 24, height: 2, background: 'var(--accent-gold)' }} />
+                                    <div className="flex items-center gap-2">
+                                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--accent-gold)' }} />
+                                        <span style={{ fontSize: '0.75rem', color: 'var(--accent-gold)', fontWeight: 700 }}>Placements</span>
+                                    </div>
                                 </div>
+
+                                <div className="panel-header">
+                                    Tap Players in Finish Order (1st → 6th)
+                                </div>
+
+                                {/* Call / Double Call Controls */}
+                                <div className="flex gap-sm md:gap-md mb-4 flex-wrap">
+                                    <button
+                                        onClick={handleCall}
+                                        className={`btn flex-1 ${multiplier >= 2 ? 'btn-call' : 'btn-secondary'}`}
+                                    >
+                                        {multiplier >= 2 ? '✓ Called' : 'Call (2×)'}
+                                    </button>
+                                    <button
+                                        onClick={handleDoubleCall}
+                                        disabled={multiplier === 1}
+                                        className={`btn flex-1 ${multiplier === 4 ? 'btn-double' : multiplier === 1 ? 'btn-secondary opacity-50' : 'btn-secondary'}`}
+                                    >
+                                        {multiplier === 4 ? '✓ Double' : 'Double (4×)'}
+                                    </button>
+                                </div>
+
+                                {/* Active Multiplier Badge */}
+                                {multiplier > 1 && (
+                                    <div className="text-center mb-4 animate-fade-in">
+                                        <span className={`multiplier-badge ${multiplier === 2 ? 'x2' : 'x4'}`}>
+                                            {multiplier === 2 ? '2× CALL' : '4× DOUBLE CALL'}
+                                        </span>
+                                    </div>
+                                )}
 
                                 {/* Current Finish Order Display */}
                                 <div className="mb-4 p-3 rounded-lg" style={{ background: 'var(--bg-secondary)' }}>
@@ -847,6 +883,7 @@ export default function SessionPage() {
                                             className={`round-item ${round.result === 'red_win' ? 'red-win' :
                                                 round.result === 'blue_win' ? 'blue-win' : 'wash'
                                                 }`}
+                                            style={round.result === 'wash' ? { background: 'rgba(244, 196, 48, 0.1)' } : undefined}
                                         >
                                             <div>
                                                 <span className="font-bold">Round {round.round_number}</span>

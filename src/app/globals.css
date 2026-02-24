@@ -542,6 +542,32 @@ h6 {
   animation: scoreChange 0.4s ease-out;
 }
 
+/* CTA Glow effect for primary action buttons */
+.btn-cta-glow {
+  position: relative;
+  overflow: visible;
+  box-shadow:
+    0 0 15px rgba(231, 76, 76, 0.4),
+    0 0 30px rgba(231, 76, 76, 0.2);
+  animation: ctaGlow 2s ease-in-out infinite;
+}
+
+@keyframes ctaGlow {
+
+  0%,
+  100% {
+    box-shadow:
+      0 0 15px rgba(231, 76, 76, 0.4),
+      0 0 30px rgba(231, 76, 76, 0.2);
+  }
+
+  50% {
+    box-shadow:
+      0 0 20px rgba(231, 76, 76, 0.6),
+      0 0 40px rgba(231, 76, 76, 0.3);
+  }
+}
+
 /* ========================================
    CARD FLIP EFFECT
    ======================================== */
@@ -585,6 +611,14 @@ h6 {
 
 .leaderboard-stats>div {
   min-width: 60px;
+}
+
+/* Leaderboard member stats grid - responsive */
+.leaderboard-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.5rem;
+  text-align: center;
 }
 
 .flex-center {
@@ -687,6 +721,11 @@ h6 {
   }
 
   .leaderboard-stats {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+  }
+
+  .leaderboard-stats-grid {
     grid-template-columns: repeat(3, 1fr);
     gap: 0.5rem;
   }
