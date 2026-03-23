@@ -485,20 +485,28 @@ export async function addRound(
     return { round, updatedPlayers };
 }
 
-export async function endSession(sessionId: string): Promise<void> {
-    if (!supabase) return;
+export async function endSession(sessionId: string): Promise<boolean> {
+    if (!supabase) return false;
 
     // Mark session as completed
-    // NOTE: A database trigger (handle_session_completed) automatically updates
-    // user_stats for all players when status changes to 'completed'
-    const { error } = await supabase
+    const { data, error, count } = await supabase
         .from('sessions')
         .update({ status: 'completed', updated_at: new Date().toISOString() })
-        .eq('id', sessionId);
+        .eq('id', sessionId)
+        .select();
 
     if (error) {
         console.error('Error ending session:', error);
+        return false;
     }
+
+    // RLS can silently block the update (0 rows matched) — detect this
+    if (!data || data.length === 0) {
+        console.error('End session failed: no rows updated (likely RLS block — you may not be the session creator)');
+        return false;
+    }
+
+    return true;
 }
 
 export async function updateRound(

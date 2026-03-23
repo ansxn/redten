@@ -120,8 +120,14 @@ CREATE POLICY "Users can view sessions" ON public.sessions
 CREATE POLICY "Users can create sessions" ON public.sessions
   FOR INSERT WITH CHECK (auth.uid() = created_by);
 
-CREATE POLICY "Session creators can update" ON public.sessions
-  FOR UPDATE USING (auth.uid() = created_by);
+CREATE POLICY "Session participants can update" ON public.sessions
+  FOR UPDATE USING (
+    auth.uid() = created_by
+    OR EXISTS (
+      SELECT 1 FROM public.session_players sp
+      WHERE sp.session_id = id AND sp.user_id = auth.uid()
+    )
+  );
 
 -- Session Players: Viewable by session participants
 CREATE POLICY "Session players viewable" ON public.session_players

@@ -345,7 +345,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const endSessionHandler = async (sessionId: string) => {
         // Update in cloud if not guest
         if (supabase && !isGuestMode) {
-            await db.endSession(sessionId);
+            const success = await db.endSession(sessionId);
+
+            if (!success) {
+                alert('Failed to end session. You may not have permission — only the session creator or a participant can end it.');
+                return;
+            }
 
             // Reload stats to get the server-calculated updates
             if (user) {
