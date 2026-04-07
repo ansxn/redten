@@ -9,6 +9,7 @@ import { calculateOptimalPayouts, getFinalStandings } from '@/lib/payout';
 import * as db from '@/lib/database';
 import Link from 'next/link';
 import Avatar from '@/components/Avatar';
+import LoadingScreen from '@/components/LoadingScreen';
 
 type GamePhase = 'lobby' | 'teams' | 'finish_order' | 'results' | 'payout';
 
@@ -45,27 +46,20 @@ export default function SessionPage() {
         load();
     }, [sessionId]);
 
-    // Update local session when sessions change
-    // SAFEGUARD: Only update if the incoming session has complete data
-    // This prevents incomplete data from getUserSessions overwriting complete round data
+    // Update local session when sessions change (with safeguard)
     useEffect(() => {
         const updated = sessions.find(s => s.id === sessionId);
         if (updated) {
-            // Check if current session has complete rounds
             const currentHasCompleteRounds = session?.rounds && session.rounds.length > 0 &&
                 session.rounds[0]?.result !== undefined;
-
-            // Check if updated session has incomplete rounds
             const updatedHasIncompleteRounds = updated.rounds.length > 0 &&
                 updated.rounds[0]?.result === undefined;
 
-            // Don't overwrite complete data with incomplete data
             if (currentHasCompleteRounds && updatedHasIncompleteRounds) {
-                // Instead, merge: take updated metadata but keep our complete rounds
                 setSession(prev => prev ? {
                     ...updated,
                     rounds: prev.rounds,
-                    players: prev.players // Keep our player scores too
+                    players: prev.players
                 } : updated);
             } else {
                 setSession(updated);
@@ -73,20 +67,12 @@ export default function SessionPage() {
         }
     }, [sessions, sessionId]);
 
-    if (isLoading) {
-        return (
-            <div className="min-h-screen flex-center">
-                <div className="text-2xl text-glow" style={{ color: 'var(--accent-gold)' }}>
-                    Loading...
-                </div>
-            </div>
-        );
-    }
+    if (isLoading) return <LoadingScreen />;
 
     if (!session) {
         return (
-            <div className="min-h-screen flex-center flex-col gap-4">
-                <div className="text-2xl">Session not found</div>
+            <div className="min-h-screen flex-center" style={{ flexDirection: 'column', gap: 'var(--space-lg)' }}>
+                <div style={{ fontSize: '1.5rem' }}>Session not found</div>
                 <Link href="/dashboard" className="btn btn-secondary">Go to Dashboard</Link>
             </div>
         );
@@ -108,12 +94,10 @@ export default function SessionPage() {
     };
 
     const handleCall = () => {
-        // Toggle: If 2 (Call) -> 1 (Normal). If 1 or 4 -> 2 (Call).
         setMultiplier(current => current === 2 ? 1 : 2);
     };
 
     const handleDoubleCall = () => {
-        // Toggle: If 4 (Double) -> 2 (Call). If 1 or 2 -> 4 (Double).
         setMultiplier(current => current === 4 ? 2 : 4);
     };
 
@@ -137,16 +121,12 @@ export default function SessionPage() {
         return index >= 0 ? index + 1 : null;
     };
 
-    // Determine winner based on finish order
     const determineWinner = (): 'red_win' | 'blue_win' | null => {
         if (finishOrder.length !== 6) return null;
-
-        // First place determines winner
         const firstPlace = finishOrder[0];
         return selectedRedPlayers.includes(firstPlace) ? 'red_win' : 'blue_win';
     };
 
-    // Calculate points preview based on current finish order
     const getPointsPreview = (): number => {
         if (finishOrder.length !== 6) return 0;
         const allPlayerIds = session.players.map(p => p.id);
@@ -163,7 +143,6 @@ export default function SessionPage() {
             return;
         }
 
-        // Prepare round data
         const roundData: NewRoundData = {
             multiplier,
             red_team_player_ids: selectedRedPlayers,
@@ -173,7 +152,6 @@ export default function SessionPage() {
 
         // HANDLE EDIT MODE
         if (editingRoundId) {
-            // Update cloud
             if (!isGuestMode && user) {
                 console.log('=== EDIT ROUND START ===');
                 console.log('Session players BEFORE updateRound:', session.players.map(p => ({ id: p.id, user_id: p.user_id, score: p.session_score })));
@@ -203,43 +181,25 @@ export default function SessionPage() {
                     updateSession(updatedSession);
                     setSession(updatedSession);
                     setEditingRoundId(null);
-                    setPhase('lobby'); // Go back to lobby after edit
+                    setPhase('lobby');
                     console.log('=== EDIT ROUND COMPLETE ===');
                 }
             } else {
-                // Determine old scores to revert
                 const oldRound = session.rounds.find(r => r.id === editingRoundId);
                 const oldScores = oldRound ? oldRound.points_awarded : {};
-
-                // Calculate new scores
                 const newScores = calculateRoundScores(roundData, session.players);
 
-                // Recalculate all players
                 const updatedPlayers = session.players.map(p => {
                     const oldPoints = oldScores[p.id] || 0;
                     const newPoints = newScores[p.id] || 0;
-                    return {
-                        ...p,
-                        session_score: p.session_score - oldPoints + newPoints
-                    };
+                    return { ...p, session_score: p.session_score - oldPoints + newPoints };
                 });
 
                 const updatedRounds = session.rounds.map(r =>
-                    r.id === editingRoundId
-                        ? {
-                            ...r,
-                            ...roundData,
-                            points_awarded: newScores
-                        }
-                        : r
+                    r.id === editingRoundId ? { ...r, ...roundData, points_awarded: newScores } : r
                 );
 
-                const updatedSession = {
-                    ...session,
-                    players: updatedPlayers,
-                    rounds: updatedRounds
-                };
-
+                const updatedSession = { ...session, players: updatedPlayers, rounds: updatedRounds };
                 updateSession(updatedSession);
                 setSession(updatedSession);
                 setEditingRoundId(null);
@@ -251,7 +211,6 @@ export default function SessionPage() {
         }
 
         // NORMAL NEW ROUND
-        // Save to database if authenticated
         if (!isGuestMode && user) {
             const dbResult = await db.addRound(sessionId, roundData, session.players);
             if (dbResult) {
@@ -265,8 +224,6 @@ export default function SessionPage() {
                 setLastRoundScores(dbResult.round.points_awarded);
                 setPhase('results');
 
-                // Stats are now updated in the database by addRound
-                // Reload stats from database to reflect changes
                 const updatedStats = await db.getUserStats(user.id);
                 if (updatedStats) {
                     updateStats(updatedStats);
@@ -302,7 +259,6 @@ export default function SessionPage() {
         setLastRoundScores(scores);
         setPhase('results');
 
-        // Update user stats if they participated
         if (user && scores[user.id] !== undefined) {
             const won = scores[user.id] > 0;
             updateStats({
@@ -314,7 +270,6 @@ export default function SessionPage() {
     };
 
     const handleWash = async () => {
-        // Wash = no points change, but still record placements
         if (finishOrder.length !== 6) {
             alert('Please select all 6 player placements before recording the wash.');
             return;
@@ -327,9 +282,7 @@ export default function SessionPage() {
             result: 'wash'
         };
 
-        // Handle Edit Wash
         if (editingRoundId) {
-            // Update cloud
             if (!isGuestMode && user) {
                 const dbResult = await db.updateRound(sessionId, editingRoundId, roundData, session.players);
                 if (dbResult) {
@@ -338,47 +291,27 @@ export default function SessionPage() {
                             ? { ...r, ...roundData, round_number: r.round_number, id: r.id, created_at: r.created_at, points_awarded: {} }
                             : r
                     );
-
-                    const updatedSession = {
-                        ...session,
-                        players: dbResult.updatedPlayers,
-                        rounds: updatedRounds
-                    };
-
+                    const updatedSession = { ...session, players: dbResult.updatedPlayers, rounds: updatedRounds };
                     updateSession(updatedSession);
                     setSession(updatedSession);
                     setEditingRoundId(null);
                     setPhase('lobby');
                 }
             } else {
-                // Local Guest Mode Edit
                 const oldRound = session.rounds.find(r => r.id === editingRoundId);
                 const oldScores = oldRound ? oldRound.points_awarded : {};
-
-                // Wash implies 0 new points
                 const newScores: Record<string, number> = {};
 
-                // Recalculate
                 const updatedPlayers = session.players.map(p => {
                     const oldPoints = oldScores[p.id] || 0;
-                    return {
-                        ...p,
-                        session_score: p.session_score - oldPoints // Remove old points, add 0
-                    };
+                    return { ...p, session_score: p.session_score - oldPoints };
                 });
 
                 const updatedRounds = session.rounds.map(r =>
-                    r.id === editingRoundId
-                        ? { ...r, ...roundData, points_awarded: newScores }
-                        : r
+                    r.id === editingRoundId ? { ...r, ...roundData, points_awarded: newScores } : r
                 );
 
-                const updatedSession = {
-                    ...session,
-                    players: updatedPlayers,
-                    rounds: updatedRounds
-                };
-
+                const updatedSession = { ...session, players: updatedPlayers, rounds: updatedRounds };
                 updateSession(updatedSession);
                 setSession(updatedSession);
                 setEditingRoundId(null);
@@ -387,7 +320,6 @@ export default function SessionPage() {
             return;
         }
 
-        // Save to database if authenticated
         if (!isGuestMode && user) {
             const dbResult = await db.addRound(sessionId, roundData, session.players);
             if (dbResult) {
@@ -404,7 +336,6 @@ export default function SessionPage() {
             }
         }
 
-        // Fallback to local for guest mode
         const newRound: Round = {
             id: generateId(),
             round_number: session.rounds.length + 1,
@@ -416,11 +347,7 @@ export default function SessionPage() {
             created_at: new Date().toISOString()
         };
 
-        const updatedSession = {
-            ...session,
-            rounds: [...session.rounds, newRound]
-        };
-
+        const updatedSession = { ...session, rounds: [...session.rounds, newRound] };
         updateSession(updatedSession);
         setSession(updatedSession);
         setLastRoundScores({});
@@ -432,8 +359,6 @@ export default function SessionPage() {
         setMultiplier(round.multiplier);
         setSelectedRedPlayers(round.red_team_player_ids || []);
         setFinishOrder(round.finish_order || []);
-
-        // Determine phase based on what's missing? No, just start at teams is safest
         setPhase('teams');
     };
 
@@ -463,25 +388,21 @@ export default function SessionPage() {
         <main className="min-h-screen p-4 md:p-8">
             <div className="container">
                 {/* Header */}
-                <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4" style={{ marginBottom: 'var(--space-xl)' }}>
                     <div>
-                        <Link href="/dashboard" className="text-sm mb-2 inline-block" style={{ color: 'var(--text-muted)' }}>
-                            ← Back to Dashboard
+                        <Link href="/dashboard" className="btn btn-ghost" style={{ fontSize: '0.8rem', padding: '0.3rem 0.5rem', marginBottom: 'var(--space-sm)', display: 'inline-flex' }}>
+                            ← Dashboard
                         </Link>
-                        <h1 className="text-title text-2xl md:text-3xl">
+                        <h1 className="text-title" style={{ fontSize: '1.5rem' }}>
                             {session.name || 'Game Session'}
                         </h1>
-                        <p style={{ color: 'var(--text-secondary)' }}>
-                            Round {session.rounds.length + (phase === 'teams' || phase === 'finish_order' ? 1 : 0)} •
-                            ${session.point_value}/point
+                        <p className="text-sub" style={{ fontSize: '0.9rem' }}>
+                            Round {session.rounds.length + (phase === 'teams' || phase === 'finish_order' ? 1 : 0)} • ${session.point_value}/point
                         </p>
                     </div>
 
                     {session.status === 'active' && phase !== 'payout' && (
-                        <button
-                            onClick={handleEndSession}
-                            className="btn btn-secondary"
-                        >
+                        <button onClick={handleEndSession} className="btn btn-secondary">
                             End Session
                         </button>
                     )}
@@ -495,37 +416,35 @@ export default function SessionPage() {
                             <div className="panel animate-slide-up">
                                 <div className="panel-header">Ready to Play</div>
 
-                                <div className="grid-players mb-6">
+                                <div className="grid-players" style={{ marginBottom: 'var(--space-xl)' }}>
                                     {session.players.map(player => (
-                                        <div key={player.id} className="player-card">
+                                        <div key={player.id} className="player-card" style={{ cursor: 'default' }}>
                                             <div className="flex items-center gap-3">
                                                 {player.is_guest ? (
                                                     <>
                                                         <Avatar
                                                             username={player.username}
                                                             avatarColor={player.avatar_color}
+                                                            size="sm"
                                                         />
-                                                        <div>
-                                                            <div className="font-bold">{player.username}</div>
-                                                            <div className={`player-score ${player.session_score > 0 ? 'positive' :
-                                                                player.session_score < 0 ? 'negative' : 'neutral'
-                                                                }`}>
+                                                        <div style={{ minWidth: 0 }}>
+                                                            <div className="font-bold" style={{ fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{player.username}</div>
+                                                            <div className={`player-score ${player.session_score > 0 ? 'positive' : player.session_score < 0 ? 'negative' : 'neutral'}`} style={{ fontSize: '1rem' }}>
                                                                 {formatPoints(player.session_score)} pts
                                                             </div>
                                                         </div>
                                                     </>
                                                 ) : (
-                                                    <Link href={`/profile/${player.user_id || ''}`} className="flex items-center gap-3 w-full hover:opacity-80 transition-opacity">
+                                                    <Link href={`/profile/${player.user_id || ''}`} className="flex items-center gap-3 w-full hover:opacity-80 transition-opacity" style={{ minWidth: 0 }}>
                                                         <Avatar
                                                             userId={player.user_id || undefined}
                                                             username={player.username}
                                                             avatarColor={player.avatar_color}
+                                                            size="sm"
                                                         />
-                                                        <div>
-                                                            <div className="font-bold underline decoration-dotted underline-offset-4">{player.username}</div>
-                                                            <div className={`player-score ${player.session_score > 0 ? 'positive' :
-                                                                player.session_score < 0 ? 'negative' : 'neutral'
-                                                                }`}>
+                                                        <div style={{ minWidth: 0 }}>
+                                                            <div className="font-bold" style={{ fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{player.username}</div>
+                                                            <div className={`player-score ${player.session_score > 0 ? 'positive' : player.session_score < 0 ? 'negative' : 'neutral'}`} style={{ fontSize: '1rem' }}>
                                                                 {formatPoints(player.session_score)} pts
                                                             </div>
                                                         </div>
@@ -538,36 +457,35 @@ export default function SessionPage() {
 
                                 <button
                                     onClick={startNewRound}
-                                    className="btn btn-primary w-full text-xl py-4"
+                                    className="btn btn-primary btn-cta-glow w-full text-xl py-4"
                                 >
                                     Start Round {session.rounds.length + 1}
                                 </button>
                             </div>
                         )}
 
-                        {/* Teams Phase - Select Red 10 Holders */}
+                        {/* Teams Phase */}
                         {phase === 'teams' && (
                             <div className="panel animate-slide-up">
-                                {/* Step Progress */}
-                                <div className="flex items-center justify-center gap-3 mb-4">
-                                    <div className="flex items-center gap-2">
-                                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--accent-gold)' }} />
-                                        <span style={{ fontSize: '0.75rem', color: 'var(--accent-gold)', fontWeight: 700 }}>Teams</span>
+                                {/* Stepper */}
+                                <div className="stepper">
+                                    <div className="stepper-step">
+                                        <div className="stepper-dot active" />
+                                        <span className="stepper-label text-accent-gold">Teams</span>
                                     </div>
-                                    <div style={{ width: 24, height: 2, background: 'var(--border-color)' }} />
-                                    <div className="flex items-center gap-2">
-                                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--border-color)' }} />
-                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Placements</span>
+                                    <div className="stepper-line" style={{ background: 'var(--border-color)' }} />
+                                    <div className="stepper-step">
+                                        <div className="stepper-dot pending" />
+                                        <span className="stepper-label text-dim">Placements</span>
                                     </div>
                                 </div>
 
                                 <div className="panel-header">
-                                    Select Red 10 Holders
+                                    {editingRoundId ? 'Edit Round — Select Red 10 Holders' : 'Select Red 10 Holders'}
                                 </div>
 
-                                {/* Red Team Selection */}
-                                <div className="mb-6">
-                                    <h3 className="font-bold mb-3" style={{ color: 'var(--accent-red)' }}>
+                                <div style={{ marginBottom: 'var(--space-xl)' }}>
+                                    <h3 className="font-bold" style={{ color: 'var(--accent-red)', marginBottom: 'var(--space-md)', fontSize: '0.9rem' }}>
                                         🔴 Tap players holding Red 10s
                                     </h3>
                                     <div className="grid-players">
@@ -575,12 +493,11 @@ export default function SessionPage() {
                                             <div
                                                 key={player.id}
                                                 onClick={() => toggleRedPlayer(player.id)}
-                                                className={`player-card ${selectedRedPlayers.includes(player.id) ? 'red-team' : ''
-                                                    }`}
+                                                className={`player-card ${selectedRedPlayers.includes(player.id) ? 'red-team' : ''}`}
                                             >
                                                 <div className="flex items-center gap-3">
                                                     <div
-                                                        className="player-avatar"
+                                                        className="player-avatar avatar-sm"
                                                         style={{
                                                             background: selectedRedPlayers.includes(player.id)
                                                                 ? 'var(--accent-red)'
@@ -589,7 +506,7 @@ export default function SessionPage() {
                                                     >
                                                         {selectedRedPlayers.includes(player.id) ? '🔴' : player.username.charAt(0)}
                                                     </div>
-                                                    <span className="font-bold">{player.username}</span>
+                                                    <span className="font-bold" style={{ fontSize: '0.85rem' }}>{player.username}</span>
                                                 </div>
                                             </div>
                                         ))}
@@ -617,16 +534,16 @@ export default function SessionPage() {
                         {/* Finish Order Phase */}
                         {phase === 'finish_order' && (
                             <div className="panel animate-slide-up">
-                                {/* Step Progress */}
-                                <div className="flex items-center justify-center gap-3 mb-4">
-                                    <div className="flex items-center gap-2">
-                                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--accent-green)' }} />
-                                        <span style={{ fontSize: '0.75rem', color: 'var(--accent-green)', fontWeight: 700 }}>Teams ✓</span>
+                                {/* Stepper */}
+                                <div className="stepper">
+                                    <div className="stepper-step">
+                                        <div className="stepper-dot complete" />
+                                        <span className="stepper-label text-positive">Teams ✓</span>
                                     </div>
-                                    <div style={{ width: 24, height: 2, background: 'var(--accent-gold)' }} />
-                                    <div className="flex items-center gap-2">
-                                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--accent-gold)' }} />
-                                        <span style={{ fontSize: '0.75rem', color: 'var(--accent-gold)', fontWeight: 700 }}>Placements</span>
+                                    <div className="stepper-line" style={{ background: 'var(--accent-gold)' }} />
+                                    <div className="stepper-step">
+                                        <div className="stepper-dot active" />
+                                        <span className="stepper-label text-accent-gold">Placements</span>
                                     </div>
                                 </div>
 
@@ -635,7 +552,7 @@ export default function SessionPage() {
                                 </div>
 
                                 {/* Call / Double Call Controls */}
-                                <div className="flex gap-sm md:gap-md mb-4 flex-wrap">
+                                <div className="flex gap-sm md:gap-md flex-wrap" style={{ marginBottom: 'var(--space-lg)' }}>
                                     <button
                                         onClick={handleCall}
                                         className={`btn flex-1 ${multiplier >= 2 ? 'btn-call' : 'btn-secondary'}`}
@@ -653,7 +570,7 @@ export default function SessionPage() {
 
                                 {/* Active Multiplier Badge */}
                                 {multiplier > 1 && (
-                                    <div className="text-center mb-4 animate-fade-in">
+                                    <div className="text-center animate-fade-in" style={{ marginBottom: 'var(--space-lg)' }}>
                                         <span className={`multiplier-badge ${multiplier === 2 ? 'x2' : 'x4'}`}>
                                             {multiplier === 2 ? '2× CALL' : '4× DOUBLE CALL'}
                                         </span>
@@ -661,11 +578,11 @@ export default function SessionPage() {
                                 )}
 
                                 {/* Current Finish Order Display */}
-                                <div className="mb-4 p-3 rounded-lg" style={{ background: 'var(--bg-secondary)' }}>
-                                    <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>
+                                <div style={{ marginBottom: 'var(--space-lg)', padding: 'var(--space-md)', borderRadius: 'var(--radius-md)', background: 'var(--bg-surface)' }}>
+                                    <p className="text-dim" style={{ fontSize: '0.8rem', marginBottom: 'var(--space-sm)' }}>
                                         Finish Order ({finishOrder.length}/6):
                                     </p>
-                                    <div className="flex flex-wrap gap-2">
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-sm)' }}>
                                         {finishOrder.map((playerId, index) => {
                                             const player = session.players.find(p => p.id === playerId);
                                             const isRed = selectedRedPlayers.includes(playerId);
@@ -675,9 +592,9 @@ export default function SessionPage() {
                                                     onClick={() => removeFromFinishOrder(playerId)}
                                                     className="btn btn-secondary"
                                                     style={{
-                                                        fontSize: '0.75rem',
-                                                        padding: '0.25rem 0.5rem',
-                                                        borderColor: isRed ? 'var(--accent-red)' : 'var(--accent-blue)'
+                                                        fontSize: '0.7rem',
+                                                        padding: '0.2rem 0.5rem',
+                                                        borderColor: isRed ? 'rgba(231, 76, 76, 0.5)' : 'rgba(96, 165, 250, 0.5)',
                                                     }}
                                                 >
                                                     {index + 1}. {player?.username} ×
@@ -688,7 +605,7 @@ export default function SessionPage() {
                                 </div>
 
                                 {/* Player Selection */}
-                                <div className="mb-6">
+                                <div style={{ marginBottom: 'var(--space-xl)' }}>
                                     <div className="grid-players">
                                         {session.players.map(player => {
                                             const position = getFinishPosition(player.id);
@@ -705,22 +622,17 @@ export default function SessionPage() {
                                                     <div className="flex items-center justify-between">
                                                         <div className="flex items-center gap-3">
                                                             <div
-                                                                className="player-avatar"
+                                                                className="player-avatar avatar-sm"
                                                                 style={{
                                                                     background: isRed ? 'var(--accent-red)' : 'var(--accent-blue)',
-                                                                    width: 36,
-                                                                    height: 36
                                                                 }}
                                                             >
                                                                 {isRed ? '🔴' : '🔵'}
                                                             </div>
-                                                            <span className="font-bold">{player.username}</span>
+                                                            <span className="font-bold" style={{ fontSize: '0.85rem' }}>{player.username}</span>
                                                         </div>
                                                         {position !== null && (
-                                                            <span className="font-bold" style={{
-                                                                color: 'var(--accent-gold)',
-                                                                fontSize: '1.25rem'
-                                                            }}>
+                                                            <span className="font-bold font-data text-accent-gold" style={{ fontSize: '1.1rem' }}>
                                                                 #{position}
                                                             </span>
                                                         )}
@@ -733,31 +645,31 @@ export default function SessionPage() {
 
                                 {/* Points Preview */}
                                 {finishOrder.length === 6 && (
-                                    <div className="mb-4 p-4 rounded-lg text-center animate-fade-in" style={{
-                                        background: winner === 'red_win' ? 'rgba(231, 76, 76, 0.2)' : 'rgba(96, 165, 250, 0.2)'
+                                    <div className="animate-fade-in" style={{
+                                        marginBottom: 'var(--space-lg)',
+                                        padding: 'var(--space-lg)',
+                                        borderRadius: 'var(--radius-md)',
+                                        textAlign: 'center',
+                                        background: winner === 'red_win' ? 'var(--accent-red-muted)' : 'var(--accent-blue-muted)',
                                     }}>
-                                        <div className="text-lg mb-1" style={{
-                                            color: winner === 'red_win' ? 'var(--accent-red)' : 'var(--accent-blue)'
+                                        <div style={{
+                                            fontSize: '1.1rem',
+                                            marginBottom: 'var(--space-xs)',
+                                            color: winner === 'red_win' ? 'var(--accent-red)' : 'var(--accent-blue)',
                                         }}>
                                             {winner === 'red_win' ? '🔴 Red Wins!' : '🔵 Blue Wins!'}
                                         </div>
-                                        <div className="text-2xl font-bold" style={{ color: 'var(--accent-gold)' }}>
+                                        <div className="font-bold font-data text-accent-gold" style={{ fontSize: '1.5rem' }}>
                                             {pointsPreview * multiplier} points × ${session.point_value}
                                         </div>
                                     </div>
                                 )}
 
                                 <div className="flex gap-sm flex-wrap">
-                                    <button
-                                        onClick={() => setPhase('teams')}
-                                        className="btn btn-secondary"
-                                    >
+                                    <button onClick={() => setPhase('teams')} className="btn btn-secondary">
                                         ← Back
                                     </button>
-                                    <button
-                                        onClick={handleWash}
-                                        className="btn btn-gold"
-                                    >
+                                    <button onClick={handleWash} className="btn btn-gold">
                                         🟡 Wash
                                     </button>
                                     <button
@@ -776,23 +688,23 @@ export default function SessionPage() {
                             <div className="panel animate-slide-up">
                                 <div className="panel-header">Round Complete!</div>
 
-                                <div className="grid-players mb-6">
+                                <div className="grid-players" style={{ marginBottom: 'var(--space-xl)' }}>
                                     {session.players.map(player => {
                                         const score = lastRoundScores[player.id] || 0;
                                         return (
                                             <div
                                                 key={player.id}
                                                 className={`player-card ${score > 0 ? 'red-team' : score < 0 ? 'blue-team' : ''}`}
+                                                style={{ cursor: 'default' }}
                                             >
                                                 <div className="flex justify-between items-center">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="player-avatar" style={{ background: player.avatar_color }}>
+                                                        <div className="player-avatar avatar-sm" style={{ background: player.avatar_color }}>
                                                             {player.username.charAt(0)}
                                                         </div>
-                                                        <span className="font-bold">{player.username}</span>
+                                                        <span className="font-bold" style={{ fontSize: '0.85rem' }}>{player.username}</span>
                                                     </div>
-                                                    <div className={`player-score animate-score ${score > 0 ? 'positive' : score < 0 ? 'negative' : 'neutral'
-                                                        }`}>
+                                                    <div className={`player-score animate-score ${score > 0 ? 'positive' : score < 0 ? 'negative' : 'neutral'}`}>
                                                         {formatPoints(score)}
                                                     </div>
                                                 </div>
@@ -816,19 +728,17 @@ export default function SessionPage() {
                                 <div className="panel-header">💰 Final Payout</div>
 
                                 {/* Standings */}
-                                <div className="mb-6">
-                                    <h3 className="font-bold mb-3">Final Standings</h3>
+                                <div style={{ marginBottom: 'var(--space-xl)' }}>
+                                    <h3 className="font-bold" style={{ marginBottom: 'var(--space-md)' }}>Final Standings</h3>
                                     {standings.map((item, index) => (
-                                        <div key={item.player.id} className="round-item mb-2">
+                                        <div key={item.player.id} className="round-item" style={{ marginBottom: 'var(--space-sm)' }}>
                                             <div className="flex items-center gap-3">
-                                                <span className="font-bold" style={{ color: 'var(--accent-gold)' }}>
+                                                <span className="font-bold font-data text-accent-gold">
                                                     #{index + 1}
                                                 </span>
                                                 <span>{item.player.username}</span>
                                             </div>
-                                            <span className={`font-bold ${item.dollarAmount > 0 ? 'text-green-400' :
-                                                item.dollarAmount < 0 ? 'text-red-400' : ''
-                                                }`}>
+                                            <span className={`font-bold font-data ${item.dollarAmount > 0 ? 'text-positive' : item.dollarAmount < 0 ? 'text-negative' : ''}`}>
                                                 {formatMoney(item.dollarAmount)}
                                             </span>
                                         </div>
@@ -838,9 +748,11 @@ export default function SessionPage() {
                                 {/* Transactions */}
                                 {payoutTransactions.length > 0 && (
                                     <div>
-                                        <h3 className="font-bold mb-3">Optimal Payments ({payoutTransactions.length})</h3>
+                                        <h3 className="font-bold" style={{ marginBottom: 'var(--space-md)' }}>
+                                            Optimal Payments ({payoutTransactions.length})
+                                        </h3>
                                         {payoutTransactions.map((tx, index) => (
-                                            <div key={index} className="payout-arrow mb-3">
+                                            <div key={index} className="payout-arrow" style={{ marginBottom: 'var(--space-md)' }}>
                                                 <div className="flex-1">
                                                     <span className="font-bold">{tx.from_player.username}</span>
                                                 </div>
@@ -856,63 +768,63 @@ export default function SessionPage() {
                                 )}
 
                                 {payoutTransactions.length === 0 && (
-                                    <div className="text-center py-4" style={{ color: 'var(--text-muted)' }}>
+                                    <div className="text-center text-dim" style={{ padding: 'var(--space-xl)' }}>
                                         Everyone broke even! No payments needed.
                                     </div>
                                 )}
 
-                                <Link href="/dashboard" className="btn btn-gold w-full text-xl py-4 mt-6 block text-center">
+                                <Link href="/dashboard" className="btn btn-gold w-full text-xl py-4 block text-center" style={{ marginTop: 'var(--space-xl)' }}>
                                     Back to Dashboard
                                 </Link>
                             </div>
                         )}
                     </div>
 
-                    {/* Sidebar - Round History */}
+                    {/* Sidebar — Round History */}
                     <div className="md:col-span-1">
                         <div className="panel">
                             <div className="panel-header">Round History</div>
 
                             {session.rounds.length === 0 ? (
-                                <p style={{ color: 'var(--text-muted)' }}>No rounds played yet</p>
+                                <p className="text-dim">No rounds played yet</p>
                             ) : (
-                                <div className="flex flex-col gap-sm max-h-96 overflow-y-auto">
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)', maxHeight: 384, overflowY: 'auto' }}>
                                     {[...session.rounds].reverse().map(round => (
                                         <div
                                             key={round.id}
-                                            className={`round-item ${round.result === 'red_win' ? 'red-win' :
-                                                round.result === 'blue_win' ? 'blue-win' : 'wash'
-                                                }`}
-                                            style={round.result === 'wash' ? { background: 'rgba(244, 196, 48, 0.1)' } : undefined}
+                                            className={`round-item ${round.result === 'red_win' ? 'red-win' : round.result === 'blue_win' ? 'blue-win' : 'wash'}`}
+                                            style={round.result === 'wash' ? { background: 'var(--accent-gold-muted)' } : undefined}
                                         >
                                             <div>
                                                 <span className="font-bold">Round {round.round_number}</span>
                                                 {round.multiplier > 1 && (
                                                     <span
-                                                        className="ml-2 text-xs px-2 py-1 rounded"
                                                         style={{
-                                                            background: round.multiplier === 2
-                                                                ? 'var(--accent-blue)'
-                                                                : 'var(--accent-purple)',
-                                                            color: 'white'
+                                                            marginLeft: 'var(--space-sm)',
+                                                            fontSize: '0.65rem',
+                                                            padding: '2px 6px',
+                                                            borderRadius: 'var(--radius-sm)',
+                                                            background: round.multiplier === 2 ? 'var(--accent-blue)' : 'var(--accent-purple)',
+                                                            color: 'white',
+                                                            fontWeight: 700,
                                                         }}
                                                     >
                                                         {round.multiplier}×
                                                     </span>
                                                 )}
                                             </div>
-                                            <div className="flex flex-col items-end gap-1">
-                                                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                                                    {round.result === 'red_win' ? '🔴 Red' :
-                                                        round.result === 'blue_win' ? '🔵 Blue' : '🟡 Wash'}
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 'var(--space-xs)' }}>
+                                                <span className="text-dim" style={{ fontSize: '0.7rem' }}>
+                                                    {round.result === 'red_win' ? '🔴 Red' : round.result === 'blue_win' ? '🔵 Blue' : '🟡 Wash'}
                                                 </span>
-                                                {!editingRoundId && (
+                                                {!editingRoundId && session.status === 'active' && (
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             handleEditRound(round);
                                                         }}
-                                                        className="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 border border-gray-600"
+                                                        className="btn btn-ghost"
+                                                        style={{ fontSize: '0.6rem', padding: '2px 6px' }}
                                                     >
                                                         Edit
                                                     </button>
@@ -925,12 +837,10 @@ export default function SessionPage() {
                         </div>
 
                         {/* Current Scores */}
-                        <div className="panel mt-4">
+                        <div className="panel" style={{ marginTop: 'var(--space-lg)' }}>
                             <div className="panel-header">Scores</div>
-                            <div className="flex flex-col gap-sm">
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
                                 {(() => {
-                                    // Recalculate scores from round data to ensure accuracy
-                                    // and de-duplicate players by user_id
                                     const scoreMap = new Map<string, { username: string; score: number; user_id: string | null; is_guest: boolean }>();
 
                                     for (const player of session.players) {
@@ -945,11 +855,9 @@ export default function SessionPage() {
                                         }
                                     }
 
-                                    // Sum points from all rounds
                                     for (const round of session.rounds) {
                                         if (!round.points_awarded) continue;
                                         for (const [playerId, points] of Object.entries(round.points_awarded)) {
-                                            // Find the player to get their user_id key
                                             const player = session.players.find(p => p.id === playerId);
                                             const key = player ? (player.user_id || player.id) : playerId;
                                             const entry = scoreMap.get(key);
@@ -964,18 +872,17 @@ export default function SessionPage() {
                                         .map(entry => (
                                             <div key={entry.user_id || entry.username} className="flex justify-between items-center">
                                                 {entry.is_guest ? (
-                                                    <span>{entry.username}</span>
+                                                    <span style={{ fontSize: '0.9rem' }}>{entry.username}</span>
                                                 ) : (
                                                     <Link
                                                         href={`/profile/${entry.user_id || ''}`}
                                                         className="hover:underline decoration-dotted underline-offset-4"
+                                                        style={{ fontSize: '0.9rem' }}
                                                     >
                                                         {entry.username}
                                                     </Link>
                                                 )}
-                                                <span className={`font-bold font-mono ${entry.score > 0 ? 'text-green-400' :
-                                                    entry.score < 0 ? 'text-red-400' : ''
-                                                    }`}>
+                                                <span className={`font-bold font-data ${entry.score > 0 ? 'text-positive' : entry.score < 0 ? 'text-negative' : ''}`}>
                                                     {formatPoints(entry.score)}
                                                 </span>
                                             </div>

@@ -7,6 +7,11 @@ import Link from 'next/link';
 import { getGroup, getGroupLeaderboard, updateGroup, leaveGroup, Group, LeaderboardEntry } from '@/lib/groups';
 import { formatMoney } from '@/lib/scoring';
 import Avatar from '@/components/Avatar';
+import PageShell from '@/components/PageShell';
+import BottomNav from '@/components/BottomNav';
+import LoadingScreen from '@/components/LoadingScreen';
+import Toast from '@/components/Toast';
+import Modal from '@/components/Modal';
 
 type SortField = 'lifetime_earnings' | 'win_rate' | 'total_rounds_played' | 'rounds_won' | 'rounds_lost' | 'avg_placement';
 
@@ -64,7 +69,6 @@ export default function GroupDetailPage() {
             setSortAsc(!sortAsc);
         } else {
             setSortBy(field);
-            // Default sort directions: lower is better for avg_placement, higher is better for everything else
             setSortAsc(field === 'avg_placement' ? true : false);
         }
     };
@@ -73,7 +77,6 @@ export default function GroupDetailPage() {
         let aVal = a[sortBy];
         let bVal = b[sortBy];
 
-        // For avg_placement, treat 0 (no rounds) as worst
         if (sortBy === 'avg_placement') {
             if (a.total_rounds_played === 0) aVal = 99;
             if (b.total_rounds_played === 0) bVal = 99;
@@ -121,7 +124,6 @@ export default function GroupDetailPage() {
         }
     };
 
-    // Helper to get the stat value and color for a given field
     const getStatDisplay = (member: LeaderboardEntry, field: SortField): { value: string; color: string } => {
         switch (field) {
             case 'lifetime_earnings':
@@ -145,7 +147,6 @@ export default function GroupDetailPage() {
         }
     };
 
-    // Get the label for a sort field
     const getSortLabel = (field: SortField): string => {
         switch (field) {
             case 'lifetime_earnings': return 'Earnings';
@@ -157,20 +158,12 @@ export default function GroupDetailPage() {
         }
     };
 
-    if (isLoading || isLoadingData) {
-        return (
-            <div className="min-h-screen flex-center">
-                <div className="text-2xl text-glow" style={{ color: 'var(--accent-gold)' }}>
-                    Loading...
-                </div>
-            </div>
-        );
-    }
+    if (isLoading || isLoadingData) return <LoadingScreen />;
 
     if (!user || !group) {
         return (
-            <div className="min-h-screen flex-center flex-col gap-4">
-                <div className="text-2xl">Group not found</div>
+            <div className="min-h-screen flex-center" style={{ flexDirection: 'column', gap: 'var(--space-lg)' }}>
+                <div style={{ fontSize: '1.5rem' }}>Group not found</div>
                 <Link href="/groups" className="btn btn-secondary">Go to Groups</Link>
             </div>
         );
@@ -178,7 +171,6 @@ export default function GroupDetailPage() {
 
     const isCreator = group.created_by === user.id;
 
-    // Sort config
     const sortOptions: { field: SortField; label: string; emoji: string }[] = [
         { field: 'lifetime_earnings', label: 'Earnings', emoji: '💰' },
         { field: 'win_rate', label: 'Win Rate', emoji: '📊' },
@@ -188,66 +180,50 @@ export default function GroupDetailPage() {
         { field: 'rounds_lost', label: 'Losses', emoji: '❌' },
     ];
 
-    return (
-        <main className="min-h-screen p-4 md:p-8">
-            <div className="container max-w-4xl">
-                {/* Header */}
-                <header className="mb-6 md:mb-8">
-                    <Link href="/groups" className="btn btn-secondary mb-4">
-                        ← Back
-                    </Link>
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                        <div>
-                            <h1 className="text-title text-2xl md:text-4xl">{group.name}</h1>
-                            {group.description && (
-                                <p style={{ color: 'var(--text-secondary)' }}>{group.description}</p>
-                            )}
-                            <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-                                {group.member_count} members
-                            </p>
-                        </div>
-                        <div className="flex gap-sm flex-wrap">
-                            <button onClick={copyInviteCode} className="btn btn-secondary">
-                                📋 {group.invite_code}
-                            </button>
-                            {isCreator && (
-                                <button onClick={() => setShowEditModal(true)} className="btn btn-secondary">
-                                    ✏️ Edit
-                                </button>
-                            )}
-                            <button onClick={handleLeaveGroup} className="btn btn-secondary" style={{ color: 'var(--accent-red)' }}>
-                                Leave
-                            </button>
-                        </div>
-                    </div>
-                </header>
+    // Build secondary stat fields (all except the primary sort field)
+    const secondaryFields = sortOptions
+        .map(o => o.field)
+        .filter(f => f !== sortBy);
 
-                {/* Message */}
-                {message && (
-                    <div
-                        className="mb-6 p-4 rounded-lg text-center animate-fade-in"
-                        style={{
-                            background: message.type === 'success'
-                                ? 'rgba(74, 222, 128, 0.2)'
-                                : 'rgba(231, 76, 76, 0.2)',
-                            color: message.type === 'success'
-                                ? 'var(--accent-green)'
-                                : 'var(--accent-red)'
-                        }}
-                    >
-                        {message.text}
-                    </div>
-                )}
+    return (
+        <>
+            <PageShell
+                backHref="/groups"
+                title={group.name}
+                subtitle={group.description || undefined}
+                maxWidth="md"
+                hasBottomNav
+                headerRight={
+                    <>
+                        <button onClick={copyInviteCode} className="btn btn-secondary" style={{ fontSize: '0.75rem' }}>
+                            📋 {group.invite_code}
+                        </button>
+                        {isCreator && (
+                            <button onClick={() => setShowEditModal(true)} className="btn btn-secondary" style={{ fontSize: '0.75rem' }}>
+                                ✏️ Edit
+                            </button>
+                        )}
+                        <button onClick={handleLeaveGroup} className="btn btn-ghost" style={{ color: 'var(--accent-red)', fontSize: '0.75rem' }}>
+                            Leave
+                        </button>
+                    </>
+                }
+            >
+                <p className="text-dim" style={{ fontSize: '0.85rem', marginTop: '-16px', marginBottom: 'var(--space-xl)' }}>
+                    {group.member_count} members
+                </p>
+
+                <Toast message={message} />
 
                 {/* Sort Buttons */}
-                <div className="mb-4 flex flex-wrap gap-2">
-                    <span style={{ color: 'var(--text-muted)', lineHeight: '2.5rem', fontSize: '1rem' }}>Sort:</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-sm)', marginBottom: 'var(--space-lg)', alignItems: 'center' }}>
+                    <span className="text-dim" style={{ fontSize: '0.8rem', fontWeight: 600 }}>Sort:</span>
                     {sortOptions.map(({ field, label, emoji }) => (
                         <button
                             key={field}
                             onClick={() => handleSort(field)}
                             className={`btn ${sortBy === field ? 'btn-primary' : 'btn-secondary'}`}
-                            style={{ fontSize: '0.7rem', padding: '0.4rem 0.6rem' }}
+                            style={{ fontSize: '0.65rem', padding: '0.35rem 0.5rem' }}
                         >
                             {emoji} {label} {sortBy === field && (sortAsc ? '↑' : '↓')}
                         </button>
@@ -259,9 +235,9 @@ export default function GroupDetailPage() {
                     <div className="panel-header">🏆 Leaderboard</div>
 
                     {sortedLeaderboard.length === 0 ? (
-                        <p style={{ color: 'var(--text-muted)' }}>No members yet</p>
+                        <p className="text-dim">No members yet</p>
                     ) : (
-                        <div className="flex flex-col gap-sm">
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
                             {sortedLeaderboard.map((member, index) => {
                                 const isMe = member.user_id === user.id;
                                 const primaryStat = getStatDisplay(member, sortBy);
@@ -271,23 +247,23 @@ export default function GroupDetailPage() {
                                         key={member.id}
                                         className="player-card"
                                         style={{
-                                            borderColor: isMe ? 'var(--accent-gold)' : undefined,
-                                            background: isMe ? 'rgba(244, 196, 48, 0.08)' : undefined,
-                                            cursor: 'default'
+                                            borderColor: isMe ? 'rgba(244, 196, 48, 0.4)' : undefined,
+                                            background: isMe ? 'rgba(244, 196, 48, 0.06)' : undefined,
+                                            cursor: 'default',
                                         }}
                                     >
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
                                             {/* Rank */}
                                             <span
-                                                className="font-bold"
+                                                className="font-bold font-data"
                                                 style={{
                                                     color: index === 0 ? 'var(--accent-gold)' :
                                                         index === 1 ? '#c0c0c0' :
                                                             index === 2 ? '#cd7f32' : 'var(--text-muted)',
-                                                    width: '1.75rem',
+                                                    width: '1.5rem',
                                                     flexShrink: 0,
-                                                    fontSize: '1.1rem',
-                                                    textAlign: 'center'
+                                                    fontSize: '1rem',
+                                                    textAlign: 'center',
                                                 }}
                                             >
                                                 {index + 1}
@@ -300,18 +276,17 @@ export default function GroupDetailPage() {
                                                 style={{
                                                     display: 'flex',
                                                     alignItems: 'center',
-                                                    gap: '0.6rem',
+                                                    gap: 'var(--space-sm)',
                                                     flex: 1,
                                                     minWidth: 0,
-                                                    overflow: 'hidden'
+                                                    overflow: 'hidden',
                                                 }}
                                             >
                                                 <Avatar
                                                     userId={member.user_id}
                                                     username={member.username}
                                                     avatarColor={member.avatar_color}
-                                                    size={12}
-                                                    fontSize="0.35rem"
+                                                    size="sm"
                                                 />
                                                 <span
                                                     className="font-bold"
@@ -319,23 +294,23 @@ export default function GroupDetailPage() {
                                                         overflow: 'hidden',
                                                         textOverflow: 'ellipsis',
                                                         whiteSpace: 'nowrap',
-                                                        fontSize: '0.8rem'
+                                                        fontSize: '0.9rem',
                                                     }}
                                                 >
                                                     {member.username}
-                                                    {isMe && <span style={{ color: 'var(--accent-gold)', fontSize: '0.65rem' }}> (You)</span>}
+                                                    {isMe && <span className="text-accent-gold" style={{ fontSize: '0.7rem', marginLeft: '4px' }}>(You)</span>}
                                                 </span>
                                             </Link>
 
-                                            {/* Primary stat (currently sorted by) - always visible */}
+                                            {/* Primary stat — always visible */}
                                             <div style={{ textAlign: 'right', flexShrink: 0, minWidth: '3.5rem' }}>
                                                 <div
-                                                    className="font-bold font-mono"
-                                                    style={{ color: primaryStat.color, fontSize: '0.85rem' }}
+                                                    className="font-bold font-data"
+                                                    style={{ color: primaryStat.color, fontSize: '0.9rem' }}
                                                 >
                                                     {primaryStat.value}
                                                 </div>
-                                                <div style={{ color: 'var(--text-muted)', fontSize: '0.55rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                <div className="text-dim" style={{ fontSize: '0.55rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                                     {getSortLabel(sortBy)}
                                                 </div>
                                             </div>
@@ -345,63 +320,25 @@ export default function GroupDetailPage() {
                                         <div style={{
                                             display: 'grid',
                                             gridTemplateColumns: 'repeat(5, 1fr)',
-                                            gap: '0.5rem',
-                                            marginTop: '0.5rem',
-                                            paddingTop: '0.5rem',
-                                            borderTop: '1px solid var(--border-color)',
-                                            textAlign: 'center'
+                                            gap: 'var(--space-sm)',
+                                            marginTop: 'var(--space-sm)',
+                                            paddingTop: 'var(--space-sm)',
+                                            borderTop: '1px solid var(--border-subtle)',
+                                            textAlign: 'center',
                                         }}>
-                                            {sortBy !== 'lifetime_earnings' && (
-                                                <div>
-                                                    <div className="font-bold font-mono" style={{
-                                                        color: member.lifetime_earnings >= 0 ? 'var(--accent-green)' : 'var(--accent-red)',
-                                                        fontSize: '1rem'
-                                                    }}>
-                                                        {formatMoney(member.lifetime_earnings)}
+                                            {secondaryFields.map(field => {
+                                                const stat = getStatDisplay(member, field);
+                                                return (
+                                                    <div key={field}>
+                                                        <div className="font-bold font-data" style={{ color: stat.color, fontSize: '0.85rem' }}>
+                                                            {stat.value}
+                                                        </div>
+                                                        <div className="text-dim" style={{ fontSize: '0.55rem', textTransform: 'uppercase' }}>
+                                                            {getSortLabel(field)}
+                                                        </div>
                                                     </div>
-                                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>Earnings</div>
-                                                </div>
-                                            )}
-                                            {sortBy !== 'win_rate' && (
-                                                <div>
-                                                    <div className="font-bold font-mono" style={{ color: 'var(--accent-gold)', fontSize: '1rem' }}>
-                                                        {member.win_rate.toFixed(0)}%
-                                                    </div>
-                                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>Win Rate</div>
-                                                </div>
-                                            )}
-                                            {sortBy !== 'avg_placement' && (
-                                                <div>
-                                                    <div className="font-bold font-mono" style={{ color: 'var(--text-secondary)', fontSize: '1rem' }}>
-                                                        {member.total_rounds_played > 0 ? member.avg_placement.toFixed(1) : '-'}
-                                                    </div>
-                                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>Avg Place</div>
-                                                </div>
-                                            )}
-                                            {sortBy !== 'total_rounds_played' && (
-                                                <div>
-                                                    <div className="font-bold font-mono" style={{ color: 'var(--accent-purple)', fontSize: '1rem' }}>
-                                                        {member.total_rounds_played}
-                                                    </div>
-                                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>Rounds</div>
-                                                </div>
-                                            )}
-                                            {sortBy !== 'rounds_won' && (
-                                                <div>
-                                                    <div className="font-bold font-mono" style={{ color: 'var(--accent-green)', fontSize: '1rem' }}>
-                                                        {member.rounds_won}
-                                                    </div>
-                                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>Wins</div>
-                                                </div>
-                                            )}
-                                            {sortBy !== 'rounds_lost' && (
-                                                <div>
-                                                    <div className="font-bold font-mono" style={{ color: 'var(--accent-red)', fontSize: '1rem' }}>
-                                                        {member.rounds_lost}
-                                                    </div>
-                                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>Losses</div>
-                                                </div>
-                                            )}
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 );
@@ -412,49 +349,42 @@ export default function GroupDetailPage() {
 
                 {/* Edit Modal */}
                 {showEditModal && (
-                    <div className="fixed inset-0 bg-black/70 flex-center p-4 z-50" onClick={() => setShowEditModal(false)}>
-                        <div className="panel w-full max-w-md animate-slide-up" onClick={e => e.stopPropagation()}>
-                            <div className="panel-header">Edit Group</div>
-
-                            <div className="mb-4">
-                                <label className="label">Group Name</label>
-                                <input
-                                    type="text"
-                                    className="input"
-                                    value={editName}
-                                    onChange={e => setEditName(e.target.value)}
-                                />
-                            </div>
-
-                            <div className="mb-6">
-                                <label className="label">Description</label>
-                                <input
-                                    type="text"
-                                    className="input"
-                                    value={editDesc}
-                                    onChange={e => setEditDesc(e.target.value)}
-                                />
-                            </div>
-
-                            <div className="flex gap-sm">
-                                <button
-                                    onClick={() => setShowEditModal(false)}
-                                    className="btn btn-secondary flex-1"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={handleSaveEdit}
-                                    disabled={!editName.trim() || isSaving}
-                                    className="btn btn-primary flex-1"
-                                >
-                                    {isSaving ? 'Saving...' : 'Save'}
-                                </button>
-                            </div>
+                    <Modal onClose={() => setShowEditModal(false)} title="Edit Group">
+                        <div style={{ marginBottom: 'var(--space-lg)' }}>
+                            <label className="label">Group Name</label>
+                            <input
+                                type="text"
+                                className="input"
+                                value={editName}
+                                onChange={e => setEditName(e.target.value)}
+                            />
                         </div>
-                    </div>
+
+                        <div style={{ marginBottom: 'var(--space-xl)' }}>
+                            <label className="label">Description</label>
+                            <input
+                                type="text"
+                                className="input"
+                                value={editDesc}
+                                onChange={e => setEditDesc(e.target.value)}
+                            />
+                        </div>
+
+                        <div className="flex gap-sm">
+                            <button onClick={() => setShowEditModal(false)} className="btn btn-secondary flex-1">Cancel</button>
+                            <button
+                                onClick={handleSaveEdit}
+                                disabled={!editName.trim() || isSaving}
+                                className="btn btn-primary flex-1"
+                            >
+                                {isSaving ? 'Saving...' : 'Save'}
+                            </button>
+                        </div>
+                    </Modal>
                 )}
-            </div>
-        </main>
+            </PageShell>
+
+            <BottomNav />
+        </>
     );
 }

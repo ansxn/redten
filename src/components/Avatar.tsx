@@ -3,24 +3,34 @@
 import { useState, useEffect } from 'react';
 import { getAvatarUrl } from '@/lib/avatar';
 
+type AvatarSize = 'sm' | 'md' | 'lg' | 'xl';
+
 interface AvatarProps {
-    userId?: string;  // If provided, will try to fetch avatar image
+    userId?: string;
     username: string;
     avatarColor: string;
-    size?: number;
+    size?: AvatarSize | number;
     fontSize?: string;
 }
 
+const sizeClasses: Record<AvatarSize, string> = {
+    sm: 'avatar-sm',
+    md: '',        // default 40px from .player-avatar
+    lg: 'avatar-lg',
+    xl: 'avatar-xl',
+};
+
 /**
  * Reusable Avatar component that displays user's uploaded avatar image
- * or falls back to colored circle with initial
+ * or falls back to colored circle with initial.
+ * Supports preset sizes (sm/md/lg/xl) or raw pixel values (min 28px).
  */
 export default function Avatar({
     userId,
     username,
     avatarColor,
-    size = 40,
-    fontSize = '1rem'
+    size = 'md',
+    fontSize,
 }: AvatarProps) {
     const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
@@ -38,16 +48,25 @@ export default function Avatar({
         loadAvatar();
     }, [userId]);
 
+    // Handle preset vs number size
+    const isPreset = typeof size === 'string';
+    const sizeClass = isPreset ? sizeClasses[size] : '';
+    const pixelSize = !isPreset ? Math.max(size, 28) : undefined; // minimum 28px
+
     return (
         <div
-            className="player-avatar"
+            className={`player-avatar ${sizeClass}`}
             style={{
-                width: size,
-                height: size,
-                fontSize,
+                ...(pixelSize ? {
+                    width: pixelSize,
+                    height: pixelSize,
+                    minWidth: pixelSize,
+                    minHeight: pixelSize,
+                } : {}),
+                ...(fontSize ? { fontSize } : {}),
                 background: avatarUrl
                     ? `url(${avatarUrl}) center/cover`
-                    : avatarColor || 'linear-gradient(135deg, var(--accent-purple) 0%, var(--accent-red) 100%)'
+                    : avatarColor || 'linear-gradient(135deg, var(--accent-purple) 0%, var(--accent-red) 100%)',
             }}
         >
             {!avatarUrl && username.charAt(0).toUpperCase()}

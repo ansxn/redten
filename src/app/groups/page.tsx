@@ -5,6 +5,12 @@ import { useApp } from '@/context/AppContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getMyGroups, createGroup, joinGroup, Group } from '@/lib/groups';
+import PageShell from '@/components/PageShell';
+import BottomNav from '@/components/BottomNav';
+import LoadingScreen from '@/components/LoadingScreen';
+import Toast from '@/components/Toast';
+import Modal from '@/components/Modal';
+import EmptyState from '@/components/EmptyState';
 
 export default function GroupsPage() {
     const { user, isLoading } = useApp();
@@ -85,51 +91,22 @@ export default function GroupsPage() {
         setTimeout(() => setMessage(null), 3000);
     };
 
-    if (isLoading) {
-        return (
-            <div className="min-h-screen flex-center">
-                <div className="text-2xl text-glow" style={{ color: 'var(--accent-gold)' }}>
-                    Loading...
-                </div>
-            </div>
-        );
-    }
-
+    if (isLoading) return <LoadingScreen />;
     if (!user) return null;
 
     return (
-        <main className="min-h-screen p-4 md:p-8">
-            <div className="container max-w-2xl">
-                {/* Header */}
-                <header className="mb-6 md:mb-8">
-                    <Link href="/dashboard" className="btn btn-secondary mb-4">
-                        ← Back
-                    </Link>
-                    <h1 className="text-title text-2xl md:text-4xl">Groups</h1>
-                    <p style={{ color: 'var(--text-secondary)' }} className="text-sm md:text-base">
-                        Create or join groups to compete on leaderboards
-                    </p>
-                </header>
-
-                {/* Message */}
-                {message && (
-                    <div
-                        className="mb-6 p-4 rounded-lg text-center animate-fade-in"
-                        style={{
-                            background: message.type === 'success'
-                                ? 'rgba(74, 222, 128, 0.2)'
-                                : 'rgba(231, 76, 76, 0.2)',
-                            color: message.type === 'success'
-                                ? 'var(--accent-green)'
-                                : 'var(--accent-red)'
-                        }}
-                    >
-                        {message.text}
-                    </div>
-                )}
+        <>
+            <PageShell
+                backHref="/dashboard"
+                title="Groups"
+                subtitle="Create or join groups to compete on leaderboards"
+                maxWidth="md"
+                hasBottomNav
+            >
+                <Toast message={message} />
 
                 {/* Action Buttons */}
-                <div className="flex gap-sm mb-6 flex-wrap">
+                <div className="flex gap-sm flex-wrap" style={{ marginBottom: 'var(--space-xl)' }}>
                     <button
                         onClick={() => setShowCreateModal(true)}
                         className="btn btn-primary flex-1"
@@ -151,16 +128,17 @@ export default function GroupsPage() {
                     </div>
 
                     {isLoadingGroups ? (
-                        <p style={{ color: 'var(--text-muted)' }}>Loading groups...</p>
-                    ) : groups.length === 0 ? (
-                        <div className="text-center py-8">
-                            <p style={{ color: 'var(--text-muted)', fontSize: '2rem' }}>👥</p>
-                            <p style={{ color: 'var(--text-muted)' }}>
-                                No groups yet. Create one or join with an invite code!
-                            </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
+                            {[1, 2].map(i => <div key={i} className="skeleton skeleton-card" />)}
                         </div>
+                    ) : groups.length === 0 ? (
+                        <EmptyState
+                            icon="👥"
+                            title="No groups yet"
+                            description="Create one or join with an invite code!"
+                        />
                     ) : (
-                        <div className="flex flex-col gap-sm">
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
                             {groups.map(group => (
                                 <Link
                                     key={group.id}
@@ -171,17 +149,17 @@ export default function GroupsPage() {
                                         <div>
                                             <div className="font-bold text-lg">{group.name}</div>
                                             {group.description && (
-                                                <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                                                <div className="text-dim" style={{ fontSize: '0.85rem' }}>
                                                     {group.description}
                                                 </div>
                                             )}
                                         </div>
-                                        <div className="text-right">
-                                            <div style={{ color: 'var(--accent-gold)', fontWeight: 'bold' }}>
+                                        <div style={{ textAlign: 'right' }}>
+                                            <div className="text-accent-gold font-bold" style={{ fontSize: '0.9rem' }}>
                                                 {group.member_count} members
                                             </div>
-                                            <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                                                Code: {group.invite_code}
+                                            <div className="text-dim font-data" style={{ fontSize: '0.7rem' }}>
+                                                {group.invite_code}
                                             </div>
                                         </div>
                                     </div>
@@ -193,96 +171,80 @@ export default function GroupsPage() {
 
                 {/* Create Modal */}
                 {showCreateModal && (
-                    <div className="fixed inset-0 bg-black/70 flex-center p-4 z-50" onClick={() => setShowCreateModal(false)}>
-                        <div className="panel w-full max-w-md animate-slide-up" onClick={e => e.stopPropagation()}>
-                            <div className="panel-header">Create Group</div>
-
-                            <div className="mb-4">
-                                <label className="label">Group Name</label>
-                                <input
-                                    type="text"
-                                    className="input"
-                                    placeholder="e.g., Friday Night Poker"
-                                    value={newGroupName}
-                                    onChange={e => setNewGroupName(e.target.value)}
-                                    autoFocus
-                                />
-                            </div>
-
-                            <div className="mb-6">
-                                <label className="label">Description (optional)</label>
-                                <input
-                                    type="text"
-                                    className="input"
-                                    placeholder="e.g., Weekly games with the crew"
-                                    value={newGroupDesc}
-                                    onChange={e => setNewGroupDesc(e.target.value)}
-                                />
-                            </div>
-
-                            <div className="flex gap-sm">
-                                <button
-                                    onClick={() => setShowCreateModal(false)}
-                                    className="btn btn-secondary flex-1"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={handleCreateGroup}
-                                    disabled={!newGroupName.trim() || isCreating}
-                                    className="btn btn-primary flex-1"
-                                >
-                                    {isCreating ? 'Creating...' : 'Create'}
-                                </button>
-                            </div>
+                    <Modal onClose={() => setShowCreateModal(false)} title="Create Group">
+                        <div style={{ marginBottom: 'var(--space-lg)' }}>
+                            <label className="label">Group Name</label>
+                            <input
+                                type="text"
+                                className="input"
+                                placeholder="e.g., Friday Night Poker"
+                                value={newGroupName}
+                                onChange={e => setNewGroupName(e.target.value)}
+                                autoFocus
+                            />
                         </div>
-                    </div>
+
+                        <div style={{ marginBottom: 'var(--space-xl)' }}>
+                            <label className="label">Description (optional)</label>
+                            <input
+                                type="text"
+                                className="input"
+                                placeholder="e.g., Weekly games with the crew"
+                                value={newGroupDesc}
+                                onChange={e => setNewGroupDesc(e.target.value)}
+                            />
+                        </div>
+
+                        <div className="flex gap-sm">
+                            <button onClick={() => setShowCreateModal(false)} className="btn btn-secondary flex-1">Cancel</button>
+                            <button
+                                onClick={handleCreateGroup}
+                                disabled={!newGroupName.trim() || isCreating}
+                                className="btn btn-primary flex-1"
+                            >
+                                {isCreating ? 'Creating...' : 'Create'}
+                            </button>
+                        </div>
+                    </Modal>
                 )}
 
                 {/* Join Modal */}
                 {showJoinModal && (
-                    <div className="fixed inset-0 bg-black/70 flex-center p-4 z-50" onClick={() => setShowJoinModal(false)}>
-                        <div className="panel w-full max-w-md animate-slide-up" onClick={e => e.stopPropagation()}>
-                            <div className="panel-header">Join Group</div>
-
-                            <div className="mb-4">
-                                <label className="label">Invite Code</label>
-                                <input
-                                    type="text"
-                                    className="input text-center text-2xl tracking-widest"
-                                    placeholder="ABC123"
-                                    value={inviteCode}
-                                    onChange={e => setInviteCode(e.target.value.toUpperCase())}
-                                    maxLength={6}
-                                    autoFocus
-                                />
-                            </div>
-
-                            {joinError && (
-                                <div className="mb-4 text-center" style={{ color: 'var(--accent-red)' }}>
-                                    {joinError}
-                                </div>
-                            )}
-
-                            <div className="flex gap-sm">
-                                <button
-                                    onClick={() => { setShowJoinModal(false); setJoinError(''); }}
-                                    className="btn btn-secondary flex-1"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={handleJoinGroup}
-                                    disabled={inviteCode.length !== 6 || isJoining}
-                                    className="btn btn-primary flex-1"
-                                >
-                                    {isJoining ? 'Joining...' : 'Join'}
-                                </button>
-                            </div>
+                    <Modal onClose={() => { setShowJoinModal(false); setJoinError(''); }} title="Join Group">
+                        <div style={{ marginBottom: 'var(--space-lg)' }}>
+                            <label className="label">Invite Code</label>
+                            <input
+                                type="text"
+                                className="input text-center text-2xl tracking-widest font-data"
+                                placeholder="ABC123"
+                                value={inviteCode}
+                                onChange={e => setInviteCode(e.target.value.toUpperCase())}
+                                maxLength={6}
+                                autoFocus
+                            />
                         </div>
-                    </div>
+
+                        {joinError && (
+                            <div className="toast toast-error" style={{ marginBottom: 'var(--space-lg)' }}>
+                                {joinError}
+                            </div>
+                        )}
+
+                        <div className="flex gap-sm">
+                            <button onClick={() => { setShowJoinModal(false); setJoinError(''); }} className="btn btn-secondary flex-1">Cancel</button>
+                            <button
+                                onClick={handleJoinGroup}
+                                disabled={inviteCode.length !== 6 || isJoining}
+                                className="btn btn-primary flex-1"
+                            >
+                                {isJoining ? 'Joining...' : 'Join'}
+                            </button>
+                        </div>
+                    </Modal>
                 )}
-            </div>
-        </main>
+            </PageShell>
+
+            <BottomNav />
+        </>
     );
 }

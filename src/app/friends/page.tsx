@@ -6,6 +6,11 @@ import { useRouter } from 'next/navigation';
 import { getFriends, searchUsers, addFriend, removeFriend, Friend, UserProfile } from '@/lib/friends';
 import Link from 'next/link';
 import Avatar from '@/components/Avatar';
+import PageShell from '@/components/PageShell';
+import BottomNav from '@/components/BottomNav';
+import LoadingScreen from '@/components/LoadingScreen';
+import Toast from '@/components/Toast';
+import EmptyState from '@/components/EmptyState';
 
 export default function FriendsPage() {
     const { user, isLoading } = useApp();
@@ -41,7 +46,6 @@ export default function FriendsPage() {
 
         setIsSearching(true);
         const results = await searchUsers(searchQuery, user.id);
-        // Filter out existing friends
         const friendIds = new Set(friends.map(f => f.id));
         setSearchResults(results.filter(r => !friendIds.has(r.id)));
         setIsSearching(false);
@@ -81,54 +85,25 @@ export default function FriendsPage() {
         }
     };
 
-    if (isLoading) {
-        return (
-            <div className="min-h-screen flex-center">
-                <div className="text-2xl text-glow" style={{ color: 'var(--accent-gold)' }}>
-                    Loading...
-                </div>
-            </div>
-        );
-    }
-
+    if (isLoading) return <LoadingScreen />;
     if (!user) return null;
 
     return (
-        <main className="min-h-screen p-4 md:p-8">
-            <div className="container max-w-2xl">
-                {/* Header */}
-                <header className="mb-6 md:mb-8">
-                    <Link href="/dashboard" className="btn btn-secondary mb-4">
-                        ← Back
-                    </Link>
-                    <h1 className="text-title text-2xl md:text-4xl">Friends</h1>
-                    <p style={{ color: 'var(--text-secondary)' }} className="text-sm md:text-base">
-                        Add friends to easily invite them to game sessions
-                    </p>
-                </header>
-
-                {/* Message */}
-                {message && (
-                    <div
-                        className="mb-6 p-4 rounded-lg text-center animate-fade-in"
-                        style={{
-                            background: message.type === 'success'
-                                ? 'rgba(74, 222, 128, 0.2)'
-                                : 'rgba(231, 76, 76, 0.2)',
-                            color: message.type === 'success'
-                                ? 'var(--accent-green)'
-                                : 'var(--accent-red)'
-                        }}
-                    >
-                        {message.text}
-                    </div>
-                )}
+        <>
+            <PageShell
+                backHref="/dashboard"
+                title="Friends"
+                subtitle="Add friends to easily invite them to game sessions"
+                maxWidth="md"
+                hasBottomNav
+            >
+                <Toast message={message} />
 
                 {/* Add Friend */}
-                <section className="panel mb-6 animate-slide-up">
+                <section className="panel animate-slide-up" style={{ marginBottom: 'var(--space-xl)' }}>
                     <div className="panel-header">Add Friend</div>
 
-                    <div className="flex flex-col sm:flex-row gap-sm mb-4">
+                    <div className="flex flex-col sm:flex-row gap-sm" style={{ marginBottom: 'var(--space-lg)' }}>
                         <input
                             type="text"
                             className="input flex-1"
@@ -148,26 +123,26 @@ export default function FriendsPage() {
 
                     {/* Search Results */}
                     {searchResults.length > 0 && (
-                        <div className="flex flex-col gap-sm">
-                            <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-                                Search Results:
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
+                            <p className="text-dim" style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
+                                Search Results
                             </p>
                             {searchResults.map(result => (
                                 <div key={result.id} className="player-card">
                                     <div className="flex justify-between items-center">
-                                        <div className="flex items-center gap-3">
-                                            <Link href={`/profile/${result.id}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-                                                <Avatar
-                                                    userId={result.id}
-                                                    username={result.username}
-                                                    avatarColor={result.avatar_color || '#a855f7'}
-                                                />
-                                                <span className="font-bold underline decoration-dotted underline-offset-4">{result.username}</span>
-                                            </Link>
-                                        </div>
+                                        <Link href={`/profile/${result.id}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+                                            <Avatar
+                                                userId={result.id}
+                                                username={result.username}
+                                                avatarColor={result.avatar_color || '#a855f7'}
+                                                size="sm"
+                                            />
+                                            <span className="font-bold">{result.username}</span>
+                                        </Link>
                                         <button
                                             className="btn btn-green"
                                             onClick={() => handleAddFriend(result)}
+                                            style={{ fontSize: '0.75rem' }}
                                         >
                                             + Add
                                         </button>
@@ -178,7 +153,7 @@ export default function FriendsPage() {
                     )}
 
                     {searchQuery && searchResults.length === 0 && !isSearching && (
-                        <p style={{ color: 'var(--text-muted)' }}>
+                        <p className="text-dim">
                             No users found matching &ldquo;{searchQuery}&rdquo;
                         </p>
                     )}
@@ -191,33 +166,33 @@ export default function FriendsPage() {
                     </div>
 
                     {isLoadingFriends ? (
-                        <p style={{ color: 'var(--text-muted)' }}>Loading friends...</p>
-                    ) : friends.length === 0 ? (
-                        <div className="text-center py-8">
-                            <p style={{ color: 'var(--text-muted)', fontSize: '1.25rem' }}>👥</p>
-                            <p style={{ color: 'var(--text-muted)' }}>
-                                No friends yet. Search for users above to add them!
-                            </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
+                            {[1, 2, 3].map(i => <div key={i} className="skeleton skeleton-card" />)}
                         </div>
+                    ) : friends.length === 0 ? (
+                        <EmptyState
+                            icon="👥"
+                            title="No friends yet"
+                            description="Search for users above to add them!"
+                        />
                     ) : (
-                        <div className="flex flex-col gap-sm">
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
                             {friends.map(friend => (
                                 <div key={friend.id} className="player-card">
                                     <div className="flex justify-between items-center">
-                                        <div className="flex items-center gap-3">
-                                            <Link href={`/profile/${friend.id}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-                                                <Avatar
-                                                    userId={friend.id}
-                                                    username={friend.username}
-                                                    avatarColor={friend.avatar_color}
-                                                />
-                                                <span className="font-bold underline decoration-dotted underline-offset-4">{friend.username}</span>
-                                            </Link>
-                                        </div>
+                                        <Link href={`/profile/${friend.id}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+                                            <Avatar
+                                                userId={friend.id}
+                                                username={friend.username}
+                                                avatarColor={friend.avatar_color}
+                                                size="sm"
+                                            />
+                                            <span className="font-bold">{friend.username}</span>
+                                        </Link>
                                         <button
-                                            className="btn btn-secondary"
+                                            className="btn btn-ghost"
                                             onClick={() => handleRemoveFriend(friend.id, friend.username)}
-                                            style={{ color: 'var(--accent-red)' }}
+                                            style={{ color: 'var(--accent-red)', fontSize: '0.75rem' }}
                                         >
                                             Remove
                                         </button>
@@ -227,7 +202,9 @@ export default function FriendsPage() {
                         </div>
                     )}
                 </section>
-            </div>
-        </main>
+            </PageShell>
+
+            <BottomNav />
+        </>
     );
 }

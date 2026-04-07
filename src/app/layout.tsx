@@ -14,8 +14,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Red 10 - Score Tracker",
-  description: "Get your money up with TAW's Favourite Card Game",
+  title: "Red 10 — Score Tracker",
+  description: "Track scores, stats, and payouts for TAW's favourite card game",
 };
 
 export default function RootLayout({

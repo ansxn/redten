@@ -6,16 +6,17 @@ import { useRouter } from 'next/navigation';
 import { Session, SessionPlayer, generateId, getRandomAvatarColor } from '@/types';
 import { getFriends, searchUsers, addFriend, Friend, UserProfile } from '@/lib/friends';
 import * as db from '@/lib/database';
-import Link from 'next/link';
+import PageShell from '@/components/PageShell';
+import BottomNav from '@/components/BottomNav';
 import Avatar from '@/components/Avatar';
 
 interface SelectedPlayer {
     id: string;
     username: string;
     isGuest: boolean;
-    userId?: string;  // Real user ID if not a guest
+    userId?: string;
     avatarColor: string;
-    isFriend: boolean;  // Whether they're already a friend
+    isFriend: boolean;
 }
 
 export default function NewSession() {
@@ -35,7 +36,6 @@ export default function NewSession() {
     const [addingFriendId, setAddingFriendId] = useState<string | null>(null);
     const [showAllFriends, setShowAllFriends] = useState(false);
 
-    // Load friends list
     useEffect(() => {
         const loadFriends = async () => {
             if (user) {
@@ -51,7 +51,6 @@ export default function NewSession() {
         loadFriends();
     }, [user]);
 
-    // Add current user automatically
     useEffect(() => {
         if (user && selectedPlayers.length === 0) {
             setSelectedPlayers([{
@@ -60,7 +59,7 @@ export default function NewSession() {
                 isGuest: false,
                 userId: user.id,
                 avatarColor: getRandomAvatarColor(),
-                isFriend: false  // You're not your own friend
+                isFriend: false
             }]);
         }
     }, [user]);
@@ -70,7 +69,6 @@ export default function NewSession() {
 
         setIsSearching(true);
         const results = await searchUsers(userSearch, user.id);
-        // Filter out already selected players
         const selectedIds = new Set(selectedPlayers.map(p => p.userId).filter(Boolean));
         setSearchResults(results.filter(r => !selectedIds.has(r.id)));
         setIsSearching(false);
@@ -91,7 +89,6 @@ export default function NewSession() {
             isFriend
         }]);
 
-        // Remove from search results
         setSearchResults(searchResults.filter(r => r.id !== profile.id));
     };
 
@@ -136,11 +133,9 @@ export default function NewSession() {
         const success = await addFriend(user.id, player.userId);
 
         if (success) {
-            // Update player to show as friend
             setSelectedPlayers(selectedPlayers.map(p =>
                 p.userId === player.userId ? { ...p, isFriend: true } : p
             ));
-            // Add to friends list
             setFriends([...friends, {
                 id: player.userId,
                 username: player.username,
@@ -151,7 +146,6 @@ export default function NewSession() {
         setAddingFriendId(null);
     };
 
-    // Generate default session name from date/time
     const getDefaultSessionName = (): string => {
         const now = new Date();
         return now.toLocaleDateString('en-US', {
@@ -191,8 +185,8 @@ export default function NewSession() {
             }
 
             const sessionPlayers: SessionPlayer[] = selectedPlayers.map(p => ({
-                id: p.id,  // session_players row ID (generated locally for guest mode)
-                user_id: p.userId || null,  // auth user ID (null for guests)
+                id: p.id,
+                user_id: p.userId || null,
                 username: p.username,
                 session_score: 0,
                 is_guest: p.isGuest,
@@ -219,26 +213,20 @@ export default function NewSession() {
         }
     };
 
-    // Available friends (not already in session)
     const availableFriends = friends.filter(
         f => !selectedPlayers.some(p => p.userId === f.id)
     );
 
-    return (
-        <main className="min-h-screen p-4 md:p-8">
-            <div className="container max-w-2xl">
-                {/* Header */}
-                <header className="mb-6 md:mb-8">
-                    <Link href="/dashboard" className="btn btn-secondary mb-4">
-                        ← Back
-                    </Link>
-                    <h1 className="text-title text-2xl md:text-4xl">New Session</h1>
-                </header>
+    const playerCount = selectedPlayers.length;
+    const remaining = 6 - playerCount;
 
+    return (
+        <>
+            <PageShell backHref="/dashboard" title="New Session" maxWidth="md" hasBottomNav>
                 {/* Session Settings */}
-                <section className="panel mb-6 animate-slide-up">
+                <section className="panel animate-slide-up" style={{ marginBottom: 'var(--space-xl)' }}>
                     <div className="panel-header">Session Settings</div>
-                    <div className="flex flex-col gap-md">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)' }}>
                         <div>
                             <label className="label">Session Name (optional)</label>
                             <input
@@ -251,7 +239,7 @@ export default function NewSession() {
                         </div>
                         <div>
                             <label className="label">Point Value ($)</label>
-                            <div className="flex gap-sm flex-wrap">
+                            <div style={{ display: 'flex', gap: 'var(--space-sm)', flexWrap: 'wrap' }}>
                                 {[0.1, 0.25, 0.5, 1, 2, 5].map(value => (
                                     <button
                                         key={value}
@@ -267,11 +255,11 @@ export default function NewSession() {
                 </section>
 
                 {/* Selected Players */}
-                <section className="panel mb-6 animate-slide-up" style={{ animationDelay: '0.1s' }}>
+                <section className="panel animate-slide-up" style={{ animationDelay: '0.1s', marginBottom: 'var(--space-xl)' }}>
                     <div className="panel-header">
-                        Players ({selectedPlayers.length}/6)
+                        Players ({playerCount}/6)
                     </div>
-                    <div className="flex flex-col gap-sm">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
                         {selectedPlayers.map((player) => (
                             <div key={player.id} className="player-card">
                                 <div className="flex justify-between items-center">
@@ -280,14 +268,14 @@ export default function NewSession() {
                                             userId={player.userId}
                                             username={player.username}
                                             avatarColor={player.avatarColor}
-                                            size={36}
-                                            fontSize="0.875rem"
+                                            size="sm"
                                         />
                                         <div>
-                                            <div className="font-bold">{player.username}</div>
+                                            <div className="font-bold" style={{ fontSize: '0.9rem' }}>{player.username}</div>
                                             <div style={{
                                                 color: player.isGuest ? 'var(--text-muted)' : 'var(--accent-green)',
-                                                fontSize: '0.75rem'
+                                                fontSize: '0.7rem',
+                                                fontWeight: 600,
                                             }}>
                                                 {player.userId === user?.id
                                                     ? 'You'
@@ -300,13 +288,12 @@ export default function NewSession() {
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-sm">
-                                        {/* Add as Friend button for non-friends */}
                                         {!player.isGuest && !player.isFriend && player.userId !== user?.id && (
                                             <button
                                                 onClick={() => handleAddAsFriend(player)}
                                                 disabled={addingFriendId === player.userId}
-                                                className="btn btn-secondary"
-                                                style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
+                                                className="btn btn-ghost"
+                                                style={{ fontSize: '0.65rem', padding: '0.2rem 0.4rem', color: 'var(--accent-gold)' }}
                                             >
                                                 {addingFriendId === player.userId ? '...' : '+ Friend'}
                                             </button>
@@ -314,13 +301,8 @@ export default function NewSession() {
                                         {player.userId !== user?.id && (
                                             <button
                                                 onClick={() => removePlayer(player.id)}
-                                                style={{
-                                                    color: 'var(--accent-red)',
-                                                    background: 'none',
-                                                    border: 'none',
-                                                    cursor: 'pointer',
-                                                    fontSize: '1.25rem'
-                                                }}
+                                                className="btn btn-ghost btn-icon"
+                                                style={{ color: 'var(--accent-red)', fontSize: '1.1rem', padding: '0.2rem' }}
                                             >
                                                 ×
                                             </button>
@@ -333,10 +315,10 @@ export default function NewSession() {
                 </section>
 
                 {/* Search Users */}
-                {selectedPlayers.length < 6 && (
-                    <section className="panel mb-6 animate-slide-up" style={{ animationDelay: '0.2s' }}>
+                {playerCount < 6 && (
+                    <section className="panel animate-slide-up" style={{ animationDelay: '0.2s', marginBottom: 'var(--space-xl)' }}>
                         <div className="panel-header">Search Users</div>
-                        <div className="flex gap-sm mb-4">
+                        <div className="flex gap-sm" style={{ marginBottom: 'var(--space-lg)' }}>
                             <input
                                 type="text"
                                 className="input flex-1"
@@ -355,7 +337,7 @@ export default function NewSession() {
                         </div>
 
                         {searchResults.length > 0 && (
-                            <div className="flex flex-col gap-sm">
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
                                 {searchResults.map(result => (
                                     <div
                                         key={result.id}
@@ -368,18 +350,13 @@ export default function NewSession() {
                                                 userId={result.id}
                                                 username={result.username}
                                                 avatarColor={result.avatar_color || '#a855f7'}
-                                                size={36}
-                                                fontSize="0.875rem"
+                                                size="sm"
                                             />
-                                            <span className="font-bold">{result.username}</span>
+                                            <span className="font-bold" style={{ fontSize: '0.9rem' }}>{result.username}</span>
                                             {friends.some(f => f.id === result.id) && (
-                                                <span style={{ color: 'var(--accent-gold)', fontSize: '0.75rem' }}>★ Friend</span>
+                                                <span className="text-accent-gold" style={{ fontSize: '0.7rem' }}>★ Friend</span>
                                             )}
-                                            <span style={{
-                                                marginLeft: 'auto',
-                                                color: 'var(--accent-green)',
-                                                fontSize: '1.25rem'
-                                            }}>+</span>
+                                            <span className="text-positive" style={{ marginLeft: 'auto', fontSize: '1.1rem' }}>+</span>
                                         </div>
                                     </div>
                                 ))}
@@ -389,16 +366,16 @@ export default function NewSession() {
                 )}
 
                 {/* Quick Add Friends */}
-                {selectedPlayers.length < 6 && availableFriends.length > 0 && (
-                    <section className="panel mb-6 animate-slide-up" style={{ animationDelay: '0.25s' }}>
+                {playerCount < 6 && availableFriends.length > 0 && (
+                    <section className="panel animate-slide-up" style={{ animationDelay: '0.25s', marginBottom: 'var(--space-xl)' }}>
                         <div className="panel-header">Quick Add Friends</div>
-                        <div className="flex flex-wrap gap-sm">
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-sm)' }}>
                             {(showAllFriends ? availableFriends : availableFriends.slice(0, 5)).map(friend => (
                                 <button
                                     key={friend.id}
                                     className="btn btn-secondary"
                                     onClick={() => addFriendToSession(friend)}
-                                    style={{ fontSize: '0.875rem' }}
+                                    style={{ fontSize: '0.8rem' }}
                                 >
                                     + {friend.username}
                                 </button>
@@ -407,7 +384,7 @@ export default function NewSession() {
                                 <button
                                     onClick={() => setShowAllFriends(!showAllFriends)}
                                     className="btn btn-ghost"
-                                    style={{ fontSize: '0.875rem' }}
+                                    style={{ fontSize: '0.8rem' }}
                                 >
                                     {showAllFriends ? 'Show less' : `+${availableFriends.length - 5} more`}
                                 </button>
@@ -417,11 +394,11 @@ export default function NewSession() {
                 )}
 
                 {/* Add Guest */}
-                {selectedPlayers.length < 6 && (
-                    <section className="panel mb-6 animate-slide-up" style={{ animationDelay: '0.3s' }}>
+                {playerCount < 6 && (
+                    <section className="panel animate-slide-up" style={{ animationDelay: '0.3s', marginBottom: 'var(--space-xl)' }}>
                         <div className="panel-header">Add Guest</div>
-                        <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '1rem' }}>
-                            Guests don&apos;t have accounts - their stats won&apos;t be tracked.
+                        <p className="text-dim" style={{ fontSize: '0.8rem', marginBottom: 'var(--space-md)' }}>
+                            Guests don&apos;t have accounts — their stats won&apos;t be tracked.
                         </p>
                         <div className="flex gap-sm">
                             <input
@@ -445,24 +422,26 @@ export default function NewSession() {
 
                 {/* Start Button */}
                 <button
-                    className="btn btn-primary w-full text-xl py-4"
+                    className={`btn ${playerCount === 6 ? 'btn-primary btn-cta-glow' : 'btn-secondary'} w-full text-xl py-4`}
                     onClick={startSession}
-                    disabled={selectedPlayers.length !== 6 || isCreating}
+                    disabled={playerCount !== 6 || isCreating}
                 >
                     {isCreating
                         ? 'Creating...'
-                        : selectedPlayers.length === 6
+                        : playerCount === 6
                             ? 'Start Game'
-                            : `Need ${6 - selectedPlayers.length} more player${6 - selectedPlayers.length === 1 ? '' : 's'}`
+                            : `Need ${remaining} more player${remaining === 1 ? '' : 's'}`
                     }
                 </button>
 
-                {selectedPlayers.length !== 6 && (
-                    <p className="text-center mt-4" style={{ color: 'var(--accent-gold)' }}>
-                        Add exactly 6 players to start ({selectedPlayers.length}/6)
+                {playerCount !== 6 && (
+                    <p className="text-center text-accent-gold" style={{ marginTop: 'var(--space-lg)', fontSize: '0.85rem' }}>
+                        Add exactly 6 players to start ({playerCount}/6)
                     </p>
                 )}
-            </div>
-        </main>
+            </PageShell>
+
+            <BottomNav />
+        </>
     );
 }

@@ -4,6 +4,10 @@ import { useApp } from '@/context/AppContext';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import Link from 'next/link';
+import BottomNav from '@/components/BottomNav';
+import LoadingScreen from '@/components/LoadingScreen';
+import EmptyState from '@/components/EmptyState';
+import StatCard from '@/components/StatCard';
 
 export default function Dashboard() {
     const { user, isLoading, sessions, signOut, userStats } = useApp();
@@ -16,13 +20,7 @@ export default function Dashboard() {
     }, [user, isLoading, router]);
 
     if (isLoading || !user) {
-        return (
-            <div className="min-h-screen flex-center">
-                <div className="text-2xl text-glow" style={{ color: 'var(--accent-gold)' }}>
-                    Loading...
-                </div>
-            </div>
-        );
+        return <LoadingScreen />;
     }
 
     const activeSessions = sessions.filter(s => s.status === 'active');
@@ -32,155 +30,145 @@ export default function Dashboard() {
         : '0';
 
     return (
-        <main className="min-h-screen p-4 md:p-8">
-            <div className="container">
-                {/* Header */}
-                <header className="mobile-header mb-6 md:mb-8">
-                    <div>
-                        <img
-                            src="/redtenlogo1.png"
-                            alt="Red 10"
-                            className="h-10 md:h-12 mb-2"
-                        />
-                        <p style={{ color: 'var(--text-secondary)' }} className="text-sm md:text-base">
-                            Welcome back, <strong style={{ color: 'var(--accent-gold)' }}>{user.username}</strong>
-                        </p>
-                    </div>
-                    <div className="btn-group-mobile">
-                        <Link href="/groups" className="btn btn-secondary">
-                            Groups
-                        </Link>
-                        <Link href="/friends" className="btn btn-secondary">
-                            Friends
-                        </Link>
-                        <Link href="/profile" className="btn btn-secondary">
-                            Profile
-                        </Link>
-                        <button onClick={signOut} className="btn btn-secondary">
-                            Sign Out
-                        </button>
-                    </div>
-                </header>
+        <>
+            <main className="min-h-screen p-4 md:p-8 has-bottom-nav">
+                <div className="container">
+                    {/* Header */}
+                    <header className="mobile-header" style={{ marginBottom: 'var(--space-2xl)' }}>
+                        <div>
+                            <img
+                                src="/redtenlogo1.png"
+                                alt="Red 10"
+                                className="h-10 md:h-12"
+                                style={{ marginBottom: 'var(--space-sm)' }}
+                            />
+                            <p className="text-sub text-sm md:text-base">
+                                Welcome back, <strong className="text-accent-gold">{user.username}</strong>
+                            </p>
+                        </div>
+                        <div className="desktop-nav" style={{ alignItems: 'center', gap: 'var(--space-sm)' }}>
+                            <BottomNav variant="desktop" />
+                            <button onClick={signOut} className="nav-item" style={{ color: 'var(--accent-red)' }}>
+                                Sign Out
+                            </button>
+                        </div>
+                    </header>
 
-                {/* Stats Overview */}
-                <section className="mb-8 animate-slide-up">
-                    <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--text-secondary)' }}>
-                        Your Stats
-                    </h2>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-md">
-                        <div className="stat-card">
-                            <div
-                                className="stat-value"
-                                style={{
-                                    color: (userStats?.lifetime_earnings || 0) >= 0
-                                        ? 'var(--accent-green)'
-                                        : 'var(--accent-red)'
-                                }}
-                            >
-                                ${(userStats?.lifetime_earnings || 0).toFixed(2)}
-                            </div>
-                            <div className="stat-label">Lifetime Earnings</div>
-                        </div>
-                        <div className="stat-card">
-                            <div className="stat-value" style={{ color: 'var(--accent-gold)' }}>
-                                {winRate}%
-                            </div>
-                            <div className="stat-label">Win Rate</div>
-                        </div>
-                        <div className="stat-card">
-                            <div className="stat-value" style={{ color: 'var(--accent-purple)' }}>
-                                {userStats?.total_rounds_played || 0}
-                            </div>
-                            <div className="stat-label">Rounds Played</div>
-                        </div>
-                        <div className="stat-card">
-                            <div className="stat-value" style={{ color: 'var(--accent-blue)' }}>
-                                {completedSessions.length}
-                            </div>
-                            <div className="stat-label">Sessions</div>
-                        </div>
-                    </div>
-                </section>
-
-                {/* Quick Actions */}
-                <section className="mb-8 animate-slide-up" style={{ animationDelay: '0.1s' }}>
-                    <Link href="/session/new" className="btn btn-primary btn-cta-glow text-xl py-4 px-8">
-                        + Start New Session
-                    </Link>
-                </section>
-
-                {/* Active Sessions */}
-                {activeSessions.length > 0 && (
-                    <section className="mb-8 animate-slide-up" style={{ animationDelay: '0.2s' }}>
-                        <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--text-secondary)' }}>
-                            Active Sessions
+                    {/* Stats Overview */}
+                    <section className="animate-slide-up" style={{ marginBottom: 'var(--space-2xl)' }}>
+                        <h2 className="text-sub font-bold" style={{ marginBottom: 'var(--space-lg)' }}>
+                            Your Stats
                         </h2>
-                        <div className="flex flex-col gap-md">
-                            {activeSessions.map(session => (
-                                <Link
-                                    key={session.id}
-                                    href={`/session/${session.id}`}
-                                    className="panel hover:border-purple-500 transition-colors"
-                                    style={{ cursor: 'pointer' }}
-                                >
-                                    <div className="flex justify-between items-center">
-                                        <div>
-                                            <h3 className="text-lg font-bold">
-                                                {session.name || `Session ${session.id.slice(0, 8)}`}
-                                            </h3>
-                                            <p style={{ color: 'var(--text-muted)' }}>
-                                                {session.players.length} players • {session.rounds.length} rounds
-                                            </p>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-md">
+                            <StatCard
+                                value={`$${(userStats?.lifetime_earnings || 0).toFixed(2)}`}
+                                label="Lifetime Earnings"
+                                color={(userStats?.lifetime_earnings || 0) >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}
+                            />
+                            <StatCard
+                                value={`${winRate}%`}
+                                label="Win Rate"
+                                color="var(--accent-gold)"
+                            />
+                            <StatCard
+                                value={`${userStats?.total_rounds_played || 0}`}
+                                label="Rounds Played"
+                                color="var(--accent-purple)"
+                            />
+                            <StatCard
+                                value={`${completedSessions.length}`}
+                                label="Sessions"
+                                color="var(--accent-blue)"
+                            />
+                        </div>
+                    </section>
+
+                    {/* Quick Actions */}
+                    <section className="animate-slide-up" style={{ animationDelay: '0.1s', marginBottom: 'var(--space-2xl)' }}>
+                        <Link href="/session/new" className="btn btn-primary btn-cta-glow text-xl py-4 px-8">
+                            + Start New Session
+                        </Link>
+                    </section>
+
+                    {/* Active Sessions */}
+                    {activeSessions.length > 0 && (
+                        <section className="animate-slide-up" style={{ animationDelay: '0.2s', marginBottom: 'var(--space-2xl)' }}>
+                            <h2 className="text-sub font-bold" style={{ marginBottom: 'var(--space-lg)' }}>
+                                Active Sessions
+                            </h2>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+                                {activeSessions.map(session => (
+                                    <Link
+                                        key={session.id}
+                                        href={`/session/${session.id}`}
+                                        className="panel"
+                                        style={{ cursor: 'pointer', transition: 'border-color var(--transition-fast)' }}
+                                    >
+                                        <div className="flex justify-between items-center">
+                                            <div>
+                                                <h3 className="text-lg font-bold">
+                                                    {session.name || `Session ${session.id.slice(0, 8)}`}
+                                                </h3>
+                                                <p className="text-dim text-sm">
+                                                    {session.players.length} players • {session.rounds.length} rounds
+                                                </p>
+                                            </div>
+                                            <div className="btn btn-gold">Continue</div>
                                         </div>
-                                        <div className="btn btn-gold">Continue</div>
-                                    </div>
-                                </Link>
-                            ))}
-                        </div>
-                    </section>
-                )}
+                                    </Link>
+                                ))}
+                            </div>
+                        </section>
+                    )}
 
-                {/* Recent Sessions */}
-                {completedSessions.length > 0 && (
-                    <section className="animate-slide-up" style={{ animationDelay: '0.3s' }}>
-                        <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--text-secondary)' }}>
-                            Past Sessions
-                        </h2>
-                        <div className="flex flex-col gap-sm">
-                            {completedSessions.slice(0, 5).map(session => (
-                                <Link
-                                    key={session.id}
-                                    href={`/session/${session.id}`}
-                                    className="round-item"
-                                >
-                                    <div>
-                                        <span className="font-bold">
-                                            {session.name || `Session ${session.id.slice(0, 8)}`}
+                    {/* Recent Sessions */}
+                    {completedSessions.length > 0 && (
+                        <section className="animate-slide-up" style={{ animationDelay: '0.3s' }}>
+                            <h2 className="text-sub font-bold" style={{ marginBottom: 'var(--space-lg)' }}>
+                                Past Sessions
+                            </h2>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
+                                {completedSessions.slice(0, 5).map(session => (
+                                    <Link
+                                        key={session.id}
+                                        href={`/session/${session.id}`}
+                                        className="round-item"
+                                    >
+                                        <div>
+                                            <span className="font-bold">
+                                                {session.name || `Session ${session.id.slice(0, 8)}`}
+                                            </span>
+                                            <span className="text-dim" style={{ marginLeft: 'var(--space-lg)', fontSize: '0.875rem' }}>
+                                                {session.rounds.length} rounds
+                                            </span>
+                                        </div>
+                                        <span className="text-dim text-sm">
+                                            {new Date(session.created_at).toLocaleDateString()}
                                         </span>
-                                        <span style={{ color: 'var(--text-muted)', marginLeft: '1rem' }}>
-                                            {session.rounds.length} rounds
-                                        </span>
-                                    </div>
-                                    <span style={{ color: 'var(--text-muted)' }}>
-                                        {new Date(session.created_at).toLocaleDateString()}
-                                    </span>
-                                </Link>
-                            ))}
-                        </div>
-                    </section>
-                )}
+                                    </Link>
+                                ))}
+                            </div>
+                        </section>
+                    )}
 
-                {/* Empty State */}
-                {sessions.length === 0 && (
-                    <section className="text-center py-12 animate-fade-in">
-                        <div className="text-6xl mb-4">🃏</div>
-                        <h2 className="text-2xl font-bold mb-2">No Sessions Yet</h2>
-                        <p style={{ color: 'var(--text-muted)' }}>
-                            Start your first game session to begin tracking scores!
-                        </p>
-                    </section>
-                )}
-            </div>
-        </main>
+                    {/* Empty State */}
+                    {sessions.length === 0 && (
+                        <EmptyState
+                            icon="🃏"
+                            title="No Sessions Yet"
+                            description="Start your first game session to begin tracking scores!"
+                            action={
+                                <Link href="/session/new" className="btn btn-primary">
+                                    Start First Session
+                                </Link>
+                            }
+                        />
+                    )}
+                </div>
+            </main>
+
+            {/* Mobile bottom nav */}
+            <BottomNav />
+        </>
     );
 }
