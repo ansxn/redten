@@ -1,5 +1,6 @@
 'use client';
 
+import { getAveragePlacement } from '@/types';
 import { useApp } from '@/context/AppContext';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useRef } from 'react';
@@ -138,9 +139,7 @@ export default function Profile() {
                         <StatCard value={`${userStats?.first_places || 0}`} label="First Places" color="var(--accent-gold)" />
                         <StatCard
                             value={
-                                userStats && userStats.total_rounds_played > 0
-                                    ? ((userStats.total_placement_sum || 0) / userStats.total_rounds_played).toFixed(1)
-                                    : '-'
+                                getAveragePlacement(userStats)?.toFixed(1) ?? '-'
                             }
                             label="Avg Placement"
                             color="var(--text-secondary)"

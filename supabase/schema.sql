@@ -125,7 +125,7 @@ CREATE POLICY "Session participants can update" ON public.sessions
     auth.uid() = created_by
     OR EXISTS (
       SELECT 1 FROM public.session_players sp
-      WHERE sp.session_id = id AND sp.user_id = auth.uid()
+      WHERE sp.session_id = sessions.id AND sp.user_id = auth.uid()
     )
   );
 
@@ -325,3 +325,6 @@ CREATE POLICY "Users can view stats in their groups" ON public.user_stats
       WHERE gm1.user_id = auth.uid() AND gm2.user_id = user_stats.user_id
     )
   );
+
+-- Stats recalculation, the save_round RPC and the session-status trigger
+-- live in migrations/fix_stats_rounds_2026_11.sql (run after this file).

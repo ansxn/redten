@@ -298,6 +298,22 @@ describe('calculateRoundScores', () => {
     });
 
     describe('edge cases', () => {
+        it('should return 0 for all when result is an explicit wash, even if finish order is not a wash', () => {
+            const roundData: NewRoundData = {
+                multiplier: 2,
+                red_team_player_ids: [playerIds[0], playerIds[1], playerIds[2]],
+                // Red sweeps 1-2-3: would normally be +3 x2
+                finish_order: [playerIds[0], playerIds[1], playerIds[2], playerIds[3], playerIds[4], playerIds[5]],
+                result: 'wash'
+            };
+
+            const scores = calculateRoundScores(roundData, players);
+
+            playerIds.forEach(id => {
+                expect(scores[id]).toBe(0);
+            });
+        });
+
         it('should return 0 for all when finish order is empty', () => {
             const roundData: NewRoundData = {
                 multiplier: 1,

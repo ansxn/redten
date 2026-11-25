@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { formatMoney } from '@/lib/scoring';
 import { getAvatarUrl } from '@/lib/avatar';
 import { getUserProfile, getOrCreateUserStats, getUserSessions } from '@/lib/database';
-import { User, UserStats, Session } from '@/types';
+import { User, UserStats, Session, getAveragePlacement } from '@/types';
 
 export default function PublicProfile() {
     const { user, isLoading: appLoading } = useApp();
@@ -162,9 +162,7 @@ export default function PublicProfile() {
 
                         <div className="stat-card">
                             <div className="stat-value" style={{ color: 'var(--text-secondary)' }}>
-                                {stats && stats.total_rounds_played > 0
-                                    ? ((stats.total_placement_sum || 0) / stats.total_rounds_played).toFixed(1)
-                                    : '-'}
+                                {getAveragePlacement(stats)?.toFixed(1) ?? '-'}
                             </div>
                             <div className="stat-label">Avg Placement</div>
                         </div>

@@ -4,8 +4,8 @@
  */
 
 import { createClient } from './supabase';
-import { Session, SessionPlayer, Round, UserStats, NewRoundData, generateId, User } from '@/types';
-import { calculateRoundScores, applyRoundScores } from './scoring';
+import { Session, SessionPlayer, Round, UserStats, NewRoundData, User } from '@/types';
+import { calculateRoundScores } from './scoring';
 
 const supabase = createClient();
 
@@ -38,6 +38,8 @@ export async function getUserStats(userId: string): Promise<UserStats | null> {
         worst_session: parseFloat(data.worst_session),
         first_places: data.first_places || 0,
         total_placement_sum: data.total_placement_sum || 0,
+        rounds_lost: data.rounds_lost ?? undefined,
+        placement_rounds: data.placement_rounds ?? undefined,
     } : null;
 }
 
@@ -299,7 +301,9 @@ export async function getUserSessions(userId: string): Promise<Session[]> {
       session_players(*),
       rounds(id)
     `)
-        .or(`created_by.eq.${userId},id.in.(${participantSessionIds.join(',')})`)
+        .or(participantSessionIds.length > 0
+            ? `created_by.eq.${userId},id.in.(${participantSessionIds.join(',')})`
+            : `created_by.eq.${userId}`)
         .order('created_at', { ascending: false });
 
     if (error || !sessionsData) {
@@ -326,163 +330,69 @@ export async function getUserSessions(userId: string): Promise<Session[]> {
     }));
 }
 
-export async function addRound(
+export type SaveRoundResult =
+    | { ok: true; round: Round; updatedPlayers: SessionPlayer[] }
+    | { ok: false; error: string };
+
+/**
+ * Save a round (new or edited) through the save_round RPC.
+ * The RPC runs in a single transaction: round, red team, points, session
+ * scores and every registered player's user_stats are updated together,
+ * so a failure leaves nothing half-written. Stats are derived server-side.
+ */
+async function saveRound(
     sessionId: string,
+    roundId: string | null,
     roundData: NewRoundData,
     players: SessionPlayer[]
-): Promise<{ round: Round; updatedPlayers: SessionPlayer[] } | null> {
-    if (!supabase) return null;
+): Promise<SaveRoundResult> {
+    if (!supabase) return { ok: false, error: 'Database not configured' };
 
-    // Calculate scores
     const scores = calculateRoundScores(roundData, players);
-    const updatedPlayers = applyRoundScores(players, scores);
 
-    // Get current round count and session point_value
-    const { count } = await supabase
-        .from('rounds')
-        .select('*', { count: 'exact', head: true })
-        .eq('session_id', sessionId);
+    const { data, error } = await supabase.rpc('save_round', {
+        p_session_id: sessionId,
+        p_round_id: roundId,
+        p_multiplier: roundData.multiplier,
+        p_result: roundData.result,
+        p_finish_order: roundData.finish_order || [],
+        p_red_team: roundData.red_team_player_ids,
+        p_points: scores
+    });
 
-    const roundNumber = (count || 0) + 1;
-
-    // Get session point_value for converting points to dollars
-    const { data: sessionData } = await supabase
-        .from('sessions')
-        .select('point_value')
-        .eq('id', sessionId)
-        .single();
-    const pointValue = sessionData?.point_value || 1;
-
-    // Create round
-    const { data: roundDbData, error: roundError } = await supabase
-        .from('rounds')
-        .insert({
-            session_id: sessionId,
-            round_number: roundNumber,
-            multiplier: roundData.multiplier,
-            result: roundData.result,
-            finish_order: roundData.finish_order || []
-        })
-        .select()
-        .single();
-
-    if (roundError || !roundDbData) {
-        console.error('Error creating round:', roundError);
-        return null;
+    if (error || !data) {
+        console.error('Error saving round:', error);
+        return { ok: false, error: error?.message || 'Unknown error saving round' };
     }
 
-    // Add red team
-    if (roundData.red_team_player_ids.length > 0) {
-        const redTeamInserts = roundData.red_team_player_ids.map(playerId => ({
-            round_id: roundDbData.id,
-            player_id: playerId
-        }));
-
-        await supabase.from('round_red_team').insert(redTeamInserts);
-    }
-
-    // Add points (only if there are any - washes have no points)
-    const pointsInserts = Object.entries(scores).map(([playerId, points]) => ({
-        round_id: roundDbData.id,
-        player_id: playerId,
-        points
+    const serverScores = new Map<string, number>(
+        (data.players as { id: string; session_score: number | string }[]).map(p => [p.id, Number(p.session_score)])
+    );
+    const updatedPlayers = players.map(p => ({
+        ...p,
+        session_score: serverScores.get(p.id) ?? p.session_score
     }));
 
-    console.log('Round points to insert:', JSON.stringify(pointsInserts, null, 2));
-
-    if (pointsInserts.length > 0) {
-        const { data: insertedPoints, error: pointsError } = await supabase
-            .from('round_points')
-            .insert(pointsInserts)
-            .select();
-
-        if (pointsError) {
-            console.error('Error inserting round_points:', pointsError);
-            console.error('Attempted inserts:', pointsInserts);
-        } else {
-            console.log('Successfully inserted round_points:', insertedPoints?.length || 0, 'records');
-        }
-    } else {
-        console.log('No points to insert (wash round)');
-    }
-
-    // Update player scores in session_players table
-    for (const player of updatedPlayers) {
-        await supabase
-            .from('session_players')
-            .update({ session_score: player.session_score })
-            .eq('id', player.id);  // Use player.id (session_players row ID)
-    }
-
-    // Update user_stats for each registered player in the round
-    for (const player of players) {
-        if (player.is_guest) continue;
-
-        // Get the actual user_id from session_players table
-        const { data: sessionPlayer } = await supabase
-            .from('session_players')
-            .select('user_id')
-            .eq('id', player.id)
-            .single();
-
-        if (!sessionPlayer?.user_id) continue;
-
-        const pointsForPlayer = scores[player.id] || 0;
-        const won = pointsForPlayer > 0;
-
-        // Calculate placement (1-6 based on finish_order, 0 if not found)
-        // Handle both old format (user_id in finish_order) and new format (player.id in finish_order)
-        const finishOrder = roundData.finish_order || [];
-        let placementIndex = finishOrder.indexOf(player.id);
-
-        // If not found by player.id, try looking up by user_id (for historical data)
-        if (placementIndex === -1 && player.user_id) {
-            placementIndex = finishOrder.indexOf(player.user_id);
-        }
-
-        const placement = placementIndex >= 0 ? placementIndex + 1 : 0;
-        const gotFirst = placement === 1;
-
-        // Get current stats or create defaults
-        const currentStats = await getUserStats(sessionPlayer.user_id);
-
-        if (currentStats) {
-            // Update existing stats with placement tracking and lifetime earnings
-            await updateUserStats(sessionPlayer.user_id, {
-                total_rounds_played: currentStats.total_rounds_played + 1,
-                rounds_won: currentStats.rounds_won + (won ? 1 : 0),
-                first_places: (currentStats.first_places || 0) + (gotFirst ? 1 : 0),
-                total_placement_sum: (currentStats.total_placement_sum || 0) + placement,
-                lifetime_earnings: (currentStats.lifetime_earnings || 0) + (pointsForPlayer * pointValue)
-            });
-        } else {
-            // Create new stats row via upsert
-            await supabase.from('user_stats').upsert({
-                user_id: sessionPlayer.user_id,
-                total_rounds_played: 1,
-                rounds_won: won ? 1 : 0,
-                lifetime_earnings: pointsForPlayer * pointValue,  // Start with this round's points (in dollars)
-                sessions_played: 0,
-                best_session: 0,
-                worst_session: 0,
-                first_places: gotFirst ? 1 : 0,
-                total_placement_sum: placement
-            });
-        }
-    }
-
     const round: Round = {
-        id: roundDbData.id,
-        round_number: roundNumber,
+        id: data.round_id,
+        round_number: data.round_number,
         multiplier: roundData.multiplier,
         red_team_player_ids: roundData.red_team_player_ids,
         finish_order: roundData.finish_order || [],
         result: roundData.result,
         points_awarded: scores,
-        created_at: roundDbData.created_at
+        created_at: data.created_at
     };
 
-    return { round, updatedPlayers };
+    return { ok: true, round, updatedPlayers };
+}
+
+export async function addRound(
+    sessionId: string,
+    roundData: NewRoundData,
+    players: SessionPlayer[]
+): Promise<SaveRoundResult> {
+    return saveRound(sessionId, null, roundData, players);
 }
 
 export async function endSession(sessionId: string): Promise<boolean> {
@@ -514,156 +424,6 @@ export async function updateRound(
     roundId: string,
     roundData: NewRoundData,
     players: SessionPlayer[]
-): Promise<{ updatedPlayers: SessionPlayer[] } | null> {
-    if (!supabase) return null;
-
-    // 1. Update the round metadata
-    const { error: updateError } = await supabase
-        .from('rounds')
-        .update({
-            multiplier: roundData.multiplier,
-            result: roundData.result,
-            finish_order: roundData.finish_order || []
-        })
-        .eq('id', roundId);
-
-    if (updateError) {
-        console.error('Error updating round:', updateError);
-        return null;
-    }
-
-    // 2. Update Red Team (Delete old, Insert new)
-    const { error: deleteRedTeamError } = await supabase.from('round_red_team').delete().eq('round_id', roundId);
-    if (deleteRedTeamError) {
-        console.error('Error deleting old red team:', deleteRedTeamError);
-    }
-
-    if (roundData.red_team_player_ids.length > 0) {
-        const redTeamInserts = roundData.red_team_player_ids.map(playerId => ({
-            round_id: roundId,
-            player_id: playerId
-        }));
-        const { error: insertRedTeamError } = await supabase.from('round_red_team').insert(redTeamInserts);
-        if (insertRedTeamError) {
-            console.error('Error inserting new red team:', insertRedTeamError);
-        }
-    }
-
-    // 3. Recalculate scores for THIS round
-    const scores = calculateRoundScores(roundData, players);
-    console.log('Calculated scores for round edit:', scores);
-
-    // 4. Update Points (Delete old, Insert new)
-    const { error: deletePointsError } = await supabase
-        .from('round_points')
-        .delete()
-        .eq('round_id', roundId);
-
-    if (deletePointsError) {
-        console.error('Error deleting old round points:', deletePointsError);
-    }
-    // The original code had a `deletedCount` variable here, but the `.select('*', { count: 'exact', head: true })`
-    // chain was incorrect for counting deleted rows directly from `delete()`.
-    // To get the count of deleted rows, one would typically chain `.select()` and check the length of the returned `data`.
-    // For now, we remove the incorrect counting attempt as per the instruction.
-    // console.log('Deleted round_points count:', deletedCount);
-
-    const pointsInserts = Object.entries(scores).map(([playerId, points]) => ({
-        round_id: roundId,
-        player_id: playerId,
-        points
-    }));
-
-    if (pointsInserts.length > 0) {
-        const { error: insertPointsError } = await supabase.from('round_points').insert(pointsInserts);
-        if (insertPointsError) {
-            console.error('Error inserting new round points:', insertPointsError);
-        }
-        console.log('Inserted round_points:', pointsInserts.length, 'records');
-    }
-
-    // 5. CRITICAL: Recalculate ALL session scores from scratch
-    // We can't just apply diffs because we might have edited a round in the middle
-    // Easier to just re-sum everything from the database
-
-    // First, get all round IDs for this session
-    const { data: sessionRounds, error: roundsError } = await supabase
-        .from('rounds')
-        .select('id')
-        .eq('session_id', sessionId);
-
-    if (roundsError) {
-        console.error('Error getting rounds for session:', roundsError);
-    }
-
-    const roundIds = sessionRounds?.map(r => r.id) || [];
-    console.log('Session has', roundIds.length, 'rounds:', roundIds);
-
-    // Then get all points for those rounds
-    const { data: allRoundPoints, error: pointsError } = roundIds.length > 0
-        ? await supabase
-            .from('round_points')
-            .select('player_id, points')
-            .in('round_id', roundIds)
-        : { data: [], error: null };
-
-    if (pointsError) {
-        console.error('Error getting round points:', pointsError);
-    }
-    console.log('Found', allRoundPoints?.length || 0, 'round_points records:', allRoundPoints);
-
-    const playerTotals: Record<string, number> = {};
-
-    // Initialize with 0 - keyed by player.id (session_players row ID)
-    players.forEach(p => playerTotals[p.id] = 0);
-    console.log('Initialized playerTotals for', Object.keys(playerTotals).length, 'players:', Object.keys(playerTotals));
-
-    // Create a lookup map that handles BOTH old format (user_id) and new format (id)
-    // Historical round_points might have player_id = auth user_id (old bug)
-    // New round_points have player_id = session_players.id (correct)
-    const playerIdLookup: Record<string, string> = {};
-    players.forEach(p => {
-        // Map session_players.id -> session_players.id (for new correct records)
-        playerIdLookup[p.id] = p.id;
-        // Also map auth user_id -> session_players.id (for old buggy records)
-        if (p.user_id) {
-            playerIdLookup[p.user_id] = p.id;
-        }
-    });
-    console.log('Player ID lookup map:', playerIdLookup);
-
-    // Sum points - handle both old and new player_id formats
-    let matchedCount = 0;
-    let unmatchedCount = 0;
-    allRoundPoints?.forEach((rp: { player_id: string; points: string | number }) => {
-        const actualPlayerId = playerIdLookup[rp.player_id];
-        if (actualPlayerId && playerTotals[actualPlayerId] !== undefined) {
-            const pointValue = typeof rp.points === 'string' ? parseFloat(rp.points) : rp.points;
-            playerTotals[actualPlayerId] += pointValue;
-            matchedCount++;
-        } else {
-            console.warn('Unmatched round_points player_id:', rp.player_id, 'points:', rp.points);
-            unmatchedCount++;
-        }
-    });
-    console.log('Matched', matchedCount, 'round_points, unmatched:', unmatchedCount);
-    console.log('Final playerTotals:', playerTotals);
-
-    // 6. Update session_players with new totals
-    const updatedPlayers = players.map(p => ({
-        ...p,
-        session_score: playerTotals[p.id] || 0
-    }));
-
-    for (const player of updatedPlayers) {
-        await supabase
-            .from('session_players')
-            .update({ session_score: player.session_score })
-            .eq('id', player.id);
-    }
-
-    // Note: User Stats (lifetime earnings etc) are handled by DB Triggers now!
-    // We don't need to manually update them here.
-
-    return { updatedPlayers };
+): Promise<SaveRoundResult> {
+    return saveRound(sessionId, roundId, roundData, players);
 }

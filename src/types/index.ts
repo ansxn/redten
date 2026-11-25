@@ -18,6 +18,16 @@ export interface UserStats {
   worst_session: number;
   first_places?: number;  // Number of times finished 1st
   total_placement_sum?: number;  // Sum of all placements (for calculating average)
+  rounds_lost?: number;          // Rounds with negative points (washes are neither won nor lost)
+  placement_rounds?: number;     // Rounds with a known placement (denominator for average placement)
+}
+
+/** Average finishing position, or null if no placements are recorded */
+export function getAveragePlacement(stats: Pick<UserStats, 'total_rounds_played' | 'total_placement_sum' | 'placement_rounds'> | null | undefined): number | null {
+  if (!stats) return null;
+  const rounds = stats.placement_rounds ?? stats.total_rounds_played;
+  if (!rounds) return null;
+  return (stats.total_placement_sum || 0) / rounds;
 }
 
 export interface Session {
@@ -91,6 +101,34 @@ export const AVATAR_COLORS = [
 // Generate a random avatar color
 export function getRandomAvatarColor(): string {
   return AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
+}
+
+// Poker Session Types
+export const GAME_TYPES = ['NLH', 'PLO', 'Mixed', 'Tournament', 'Other'] as const;
+export type GameType = typeof GAME_TYPES[number];
+
+export interface PokerSession {
+  id: string;
+  user_id: string;
+  date: string;          // ISO date string (YYYY-MM-DD)
+  buy_in: number;
+  cash_out: number;
+  hours_played: number;
+  game_type: GameType;
+  stakes: string;        // e.g. "1/2", "2/5"
+  location: string;
+  notes: string;
+  created_at: string;
+}
+
+export interface PokerStats {
+  total_sessions: number;
+  total_profit: number;
+  total_hours: number;
+  avg_hourly: number;
+  win_rate: number;       // percentage of winning sessions
+  best_session: number;
+  worst_session: number;
 }
 
 // Generate unique ID

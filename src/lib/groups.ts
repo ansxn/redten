@@ -3,6 +3,7 @@
  * Handles group creation, joining, leaving, and leaderboard data
  */
 
+import { getAveragePlacement } from '@/types';
 import { createClient } from './supabase';
 
 const supabase = createClient();
@@ -295,7 +296,7 @@ export async function getGroupLeaderboard(groupId: string): Promise<LeaderboardE
     // Fetch stats
     const { data: stats } = await supabase
         .from('user_stats')
-        .select('user_id, total_rounds_played, rounds_won, lifetime_earnings, sessions_played, total_placement_sum')
+        .select('user_id, total_rounds_played, rounds_won, rounds_lost, lifetime_earnings, sessions_played, total_placement_sum, placement_rounds')
         .in('user_id', userIds);
 
     // Create lookup maps
@@ -319,12 +320,13 @@ export async function getGroupLeaderboard(groupId: string): Promise<LeaderboardE
             joined_at: member.joined_at,
             total_rounds_played: totalRounds,
             rounds_won: roundsWon,
-            rounds_lost: totalRounds - roundsWon,
+            // Washes are neither wins nor losses
+            rounds_lost: stat?.rounds_lost ?? (totalRounds - roundsWon),
             lifetime_earnings: Number(stat?.lifetime_earnings) || 0,
             sessions_played: stat?.sessions_played || 0,
             win_rate: winRate,
             total_placement_sum: stat?.total_placement_sum || 0,
-            avg_placement: totalRounds > 0 ? (stat?.total_placement_sum || 0) / totalRounds : 0
+            avg_placement: getAveragePlacement(stat) ?? 0
         };
     });
 }

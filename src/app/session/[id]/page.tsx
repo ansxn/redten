@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { useRouter, useParams } from 'next/navigation';
 import { Round, generateId, NewRoundData } from '@/types';
-import { calculateRoundScores, applyRoundScores, formatPoints, formatMoney, calculatePointsPreview } from '@/lib/scoring';
+import { calculateRoundScores, formatPoints, formatMoney, calculatePointsPreview, determineResult } from '@/lib/scoring';
 import { calculateOptimalPayouts, getFinalStandings } from '@/lib/payout';
 import * as db from '@/lib/database';
 import Link from 'next/link';
@@ -121,10 +121,11 @@ export default function SessionPage() {
         return index >= 0 ? index + 1 : null;
     };
 
-    const determineWinner = (): 'red_win' | 'blue_win' | null => {
+    // Result from the finish order: team of 1st place wins, unless a member
+    // of that team also finishes last (wash)
+    const determineWinner = (): 'red_win' | 'blue_win' | 'wash' | null => {
         if (finishOrder.length !== 6) return null;
-        const firstPlace = finishOrder[0];
-        return selectedRedPlayers.includes(firstPlace) ? 'red_win' : 'blue_win';
+        return determineResult(finishOrder, selectedRedPlayers);
     };
 
     const getPointsPreview = (): number => {
@@ -133,225 +134,104 @@ export default function SessionPage() {
         return calculatePointsPreview(finishOrder, selectedRedPlayers, allPlayerIds);
     };
 
-    const completeRound = async () => {
-        if (finishOrder.length !== 6) return;
+    const saveRound = async (result: 'red_win' | 'blue_win' | 'wash') => {
+        if (finishOrder.length !== 6 || isSubmitting) return;
         setIsSubmitting(true);
 
-        const result = determineWinner();
-        if (!result) {
-            setIsSubmitting(false);
-            return;
-        }
+        try {
+            const roundData: NewRoundData = {
+                multiplier,
+                red_team_player_ids: selectedRedPlayers,
+                finish_order: finishOrder,
+                result
+            };
+            const scores = calculateRoundScores(roundData, session.players);
 
-        const roundData: NewRoundData = {
-            multiplier,
-            red_team_player_ids: selectedRedPlayers,
-            finish_order: finishOrder,
-            result
-        };
-
-        // HANDLE EDIT MODE
-        if (editingRoundId) {
             if (!isGuestMode && user) {
-                console.log('=== EDIT ROUND START ===');
-                console.log('Session players BEFORE updateRound:', session.players.map(p => ({ id: p.id, user_id: p.user_id, score: p.session_score })));
-                console.log('Round data:', roundData);
+                // Cloud session: saved atomically by the save_round RPC, which also
+                // recalculates every registered player's stats server-side
+                const dbResult = editingRoundId
+                    ? await db.updateRound(sessionId, editingRoundId, roundData, session.players)
+                    : await db.addRound(sessionId, roundData, session.players);
 
-                const dbResult = await db.updateRound(sessionId, editingRoundId, roundData, session.players);
-
-                console.log('updateRound returned:', dbResult);
-                if (dbResult) {
-                    console.log('Updated players from DB:', dbResult.updatedPlayers.map(p => ({ id: p.id, user_id: p.user_id, score: p.session_score })));
+                if (!dbResult.ok) {
+                    alert(`Round was NOT saved: ${dbResult.error}`);
+                    return;
                 }
 
-                if (dbResult) {
-                    const updatedRounds = session.rounds.map(r =>
+                const updatedRounds = editingRoundId
+                    ? session.rounds.map(r =>
                         r.id === editingRoundId
-                            ? { ...r, ...roundData, round_number: r.round_number, id: r.id, created_at: r.created_at, points_awarded: calculateRoundScores(roundData, session.players) }
-                            : r
-                    );
+                            ? { ...dbResult.round, round_number: r.round_number, created_at: r.created_at }
+                            : r)
+                    : [...session.rounds, dbResult.round];
 
-                    const updatedSession = {
-                        ...session,
-                        players: dbResult.updatedPlayers,
-                        rounds: updatedRounds
-                    };
+                const updatedSession = { ...session, players: dbResult.updatedPlayers, rounds: updatedRounds };
+                updateSession(updatedSession);
+                setSession(updatedSession);
 
-                    console.log('Setting updatedSession with players:', updatedSession.players.map(p => ({ id: p.id, score: p.session_score })));
-                    updateSession(updatedSession);
-                    setSession(updatedSession);
-                    setEditingRoundId(null);
-                    setPhase('lobby');
-                    console.log('=== EDIT ROUND COMPLETE ===');
-                }
+                const updatedStats = await db.getUserStats(user.id);
+                if (updatedStats) updateStats(updatedStats);
             } else {
-                const oldRound = session.rounds.find(r => r.id === editingRoundId);
-                const oldScores = oldRound ? oldRound.points_awarded : {};
-                const newScores = calculateRoundScores(roundData, session.players);
+                // Local (guest mode) session
+                const oldScores = editingRoundId
+                    ? (session.rounds.find(r => r.id === editingRoundId)?.points_awarded || {})
+                    : {};
 
-                const updatedPlayers = session.players.map(p => {
-                    const oldPoints = oldScores[p.id] || 0;
-                    const newPoints = newScores[p.id] || 0;
-                    return { ...p, session_score: p.session_score - oldPoints + newPoints };
-                });
+                const updatedPlayers = session.players.map(p => ({
+                    ...p,
+                    session_score: p.session_score - (oldScores[p.id] || 0) + (scores[p.id] || 0)
+                }));
 
-                const updatedRounds = session.rounds.map(r =>
-                    r.id === editingRoundId ? { ...r, ...roundData, points_awarded: newScores } : r
-                );
+                const updatedRounds: Round[] = editingRoundId
+                    ? session.rounds.map(r => r.id === editingRoundId ? { ...r, ...roundData, points_awarded: scores } : r)
+                    : [...session.rounds, {
+                        id: generateId(),
+                        round_number: session.rounds.length + 1,
+                        ...roundData,
+                        points_awarded: scores,
+                        created_at: new Date().toISOString()
+                    }];
 
                 const updatedSession = { ...session, players: updatedPlayers, rounds: updatedRounds };
                 updateSession(updatedSession);
                 setSession(updatedSession);
+
+                // Scores are keyed by session player id, so find "me" via user_id
+                const me = user ? session.players.find(p => p.user_id === user.id) : undefined;
+                if (!editingRoundId && me) {
+                    const myPoints = scores[me.id] || 0;
+                    updateStats({
+                        total_rounds_played: (userStats?.total_rounds_played || 0) + 1,
+                        rounds_won: (userStats?.rounds_won || 0) + (myPoints > 0 ? 1 : 0),
+                        rounds_lost: (userStats?.rounds_lost || 0) + (myPoints < 0 ? 1 : 0)
+                    });
+                }
+            }
+
+            if (editingRoundId) {
                 setEditingRoundId(null);
                 setPhase('lobby');
-            }
-
-            setIsSubmitting(false);
-            return;
-        }
-
-        // NORMAL NEW ROUND
-        if (!isGuestMode && user) {
-            const dbResult = await db.addRound(sessionId, roundData, session.players);
-            if (dbResult) {
-                const updatedSession = {
-                    ...session,
-                    players: dbResult.updatedPlayers,
-                    rounds: [...session.rounds, dbResult.round]
-                };
-                updateSession(updatedSession);
-                setSession(updatedSession);
-                setLastRoundScores(dbResult.round.points_awarded);
+            } else {
+                setLastRoundScores(scores);
                 setPhase('results');
-
-                const updatedStats = await db.getUserStats(user.id);
-                if (updatedStats) {
-                    updateStats(updatedStats);
-                }
-                setIsSubmitting(false);
-                return;
             }
+        } finally {
+            setIsSubmitting(false);
         }
-
-        // Fallback to local
-        const scores = calculateRoundScores(roundData, session.players);
-        const updatedPlayers = applyRoundScores(session.players, scores);
-
-        const newRound: Round = {
-            id: generateId(),
-            round_number: session.rounds.length + 1,
-            multiplier,
-            red_team_player_ids: selectedRedPlayers,
-            finish_order: finishOrder,
-            result,
-            points_awarded: scores,
-            created_at: new Date().toISOString()
-        };
-
-        const updatedSession = {
-            ...session,
-            players: updatedPlayers,
-            rounds: [...session.rounds, newRound]
-        };
-
-        updateSession(updatedSession);
-        setSession(updatedSession);
-        setLastRoundScores(scores);
-        setPhase('results');
-
-        if (user && scores[user.id] !== undefined) {
-            const won = scores[user.id] > 0;
-            updateStats({
-                total_rounds_played: (userStats?.total_rounds_played || 0) + 1,
-                rounds_won: (userStats?.rounds_won || 0) + (won ? 1 : 0)
-            });
-        }
-        setIsSubmitting(false);
     };
 
-    const handleWash = async () => {
+    const completeRound = () => {
+        const result = determineWinner();
+        if (result) saveRound(result);
+    };
+
+    const handleWash = () => {
         if (finishOrder.length !== 6) {
             alert('Please select all 6 player placements before recording the wash.');
             return;
         }
-
-        const roundData: NewRoundData = {
-            multiplier,
-            red_team_player_ids: selectedRedPlayers,
-            finish_order: finishOrder,
-            result: 'wash'
-        };
-
-        if (editingRoundId) {
-            if (!isGuestMode && user) {
-                const dbResult = await db.updateRound(sessionId, editingRoundId, roundData, session.players);
-                if (dbResult) {
-                    const updatedRounds = session.rounds.map(r =>
-                        r.id === editingRoundId
-                            ? { ...r, ...roundData, round_number: r.round_number, id: r.id, created_at: r.created_at, points_awarded: {} }
-                            : r
-                    );
-                    const updatedSession = { ...session, players: dbResult.updatedPlayers, rounds: updatedRounds };
-                    updateSession(updatedSession);
-                    setSession(updatedSession);
-                    setEditingRoundId(null);
-                    setPhase('lobby');
-                }
-            } else {
-                const oldRound = session.rounds.find(r => r.id === editingRoundId);
-                const oldScores = oldRound ? oldRound.points_awarded : {};
-                const newScores: Record<string, number> = {};
-
-                const updatedPlayers = session.players.map(p => {
-                    const oldPoints = oldScores[p.id] || 0;
-                    return { ...p, session_score: p.session_score - oldPoints };
-                });
-
-                const updatedRounds = session.rounds.map(r =>
-                    r.id === editingRoundId ? { ...r, ...roundData, points_awarded: newScores } : r
-                );
-
-                const updatedSession = { ...session, players: updatedPlayers, rounds: updatedRounds };
-                updateSession(updatedSession);
-                setSession(updatedSession);
-                setEditingRoundId(null);
-                setPhase('lobby');
-            }
-            return;
-        }
-
-        if (!isGuestMode && user) {
-            const dbResult = await db.addRound(sessionId, roundData, session.players);
-            if (dbResult) {
-                const updatedSession = {
-                    ...session,
-                    players: dbResult.updatedPlayers,
-                    rounds: [...session.rounds, dbResult.round]
-                };
-                updateSession(updatedSession);
-                setSession(updatedSession);
-                setLastRoundScores({});
-                setPhase('results');
-                return;
-            }
-        }
-
-        const newRound: Round = {
-            id: generateId(),
-            round_number: session.rounds.length + 1,
-            multiplier,
-            red_team_player_ids: selectedRedPlayers,
-            finish_order: finishOrder,
-            result: 'wash',
-            points_awarded: {},
-            created_at: new Date().toISOString()
-        };
-
-        const updatedSession = { ...session, rounds: [...session.rounds, newRound] };
-        updateSession(updatedSession);
-        setSession(updatedSession);
-        setLastRoundScores({});
-        setPhase('results');
+        saveRound('wash');
     };
 
     const handleEditRound = (round: Round) => {
@@ -650,14 +530,14 @@ export default function SessionPage() {
                                         padding: 'var(--space-lg)',
                                         borderRadius: 'var(--radius-md)',
                                         textAlign: 'center',
-                                        background: winner === 'red_win' ? 'var(--accent-red-muted)' : 'var(--accent-blue-muted)',
+                                        background: winner === 'wash' ? 'var(--accent-gold-muted)' : winner === 'red_win' ? 'var(--accent-red-muted)' : 'var(--accent-blue-muted)',
                                     }}>
                                         <div style={{
                                             fontSize: '1.1rem',
                                             marginBottom: 'var(--space-xs)',
-                                            color: winner === 'red_win' ? 'var(--accent-red)' : 'var(--accent-blue)',
+                                            color: winner === 'wash' ? 'var(--accent-gold)' : winner === 'red_win' ? 'var(--accent-red)' : 'var(--accent-blue)',
                                         }}>
-                                            {winner === 'red_win' ? '🔴 Red Wins!' : '🔵 Blue Wins!'}
+                                            {winner === 'wash' ? '🟡 Wash — no points' : winner === 'red_win' ? '🔴 Red Wins!' : '🔵 Blue Wins!'}
                                         </div>
                                         <div className="font-bold font-data text-accent-gold" style={{ fontSize: '1.5rem' }}>
                                             {pointsPreview * multiplier} points × ${session.point_value}
@@ -669,7 +549,7 @@ export default function SessionPage() {
                                     <button onClick={() => setPhase('teams')} className="btn btn-secondary">
                                         ← Back
                                     </button>
-                                    <button onClick={handleWash} className="btn btn-gold">
+                                    <button onClick={handleWash} disabled={isSubmitting} className="btn btn-gold">
                                         🟡 Wash
                                     </button>
                                     <button

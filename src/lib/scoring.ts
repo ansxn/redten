@@ -162,6 +162,12 @@ export function calculateRoundScores(
         return scores;
     }
 
+    // An explicit wash (e.g. the Wash button) never moves points,
+    // regardless of what the finish order looks like
+    if (roundData.result === 'wash') {
+        return scores;
+    }
+
     const finishOrder = roundData.finish_order;
 
     // Divide players into teams (using player.id for gameplay)
