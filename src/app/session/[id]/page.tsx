@@ -78,12 +78,11 @@ export default function SessionPage() {
         );
     }
 
+    // Functional updates so rapid taps don't overwrite each other
     const toggleRedPlayer = (playerId: string) => {
-        if (selectedRedPlayers.includes(playerId)) {
-            setSelectedRedPlayers(selectedRedPlayers.filter(id => id !== playerId));
-        } else {
-            setSelectedRedPlayers([...selectedRedPlayers, playerId]);
-        }
+        setSelectedRedPlayers(prev =>
+            prev.includes(playerId) ? prev.filter(id => id !== playerId) : [...prev, playerId]
+        );
     };
 
     const startNewRound = () => {
@@ -108,12 +107,11 @@ export default function SessionPage() {
     };
 
     const addToFinishOrder = (playerId: string) => {
-        if (finishOrder.includes(playerId)) return;
-        setFinishOrder([...finishOrder, playerId]);
+        setFinishOrder(prev => prev.includes(playerId) || prev.length >= 6 ? prev : [...prev, playerId]);
     };
 
     const removeFromFinishOrder = (playerId: string) => {
-        setFinishOrder(finishOrder.filter(id => id !== playerId));
+        setFinishOrder(prev => prev.filter(id => id !== playerId));
     };
 
     const getFinishPosition = (playerId: string): number | null => {

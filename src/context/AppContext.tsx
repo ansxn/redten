@@ -232,7 +232,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
                             created_at: session.user.created_at,
                         });
                         setIsGuestMode(false);
-                    } else if (!isGuestMode) {
+                    } else if (!localStorage.getItem(USER_STORAGE_KEY)) {
+                        // No auth session and no stored guest: signed out.
+                        // (isGuestMode is stale inside this listener, so check storage.)
                         setUser(null);
                     }
                     setIsLoading(false);

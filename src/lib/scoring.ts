@@ -285,8 +285,11 @@ export function getPointsAtStake(multiplier: 1 | 2 | 4, playerCount: number): nu
  * Format points for display
  */
 export function formatPoints(points: number): string {
-    if (points > 0) return `+${points.toFixed(1)}`;
-    if (points < 0) return points.toFixed(1);
+    // Whole points show without decimals (+18, not +18.0); a true minus sign
+    const abs = Math.abs(points);
+    const body = Number.isInteger(abs) ? String(abs) : abs.toFixed(1);
+    if (points > 0) return `+${body}`;
+    if (points < 0) return `\u2212${body}`;
     return '0';
 }
 
@@ -299,7 +302,7 @@ export function formatMoney(amount: number): string {
         style: 'currency',
         currency: 'USD'
     });
-    return amount < 0 ? `-${formatted}` : formatted;
+    return amount < 0 ? `\u2212${formatted}` : formatted;
 }
 
 /**

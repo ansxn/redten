@@ -1066,3 +1066,123 @@ h3 { font-size: 1.1rem; }
 @media (max-width: 768px) {
   .flex-stack-mobile { flex-direction: column; }
 }
+/* ========================================
+   BALATRO POLISH
+   Small, additive touches on top of the base system:
+   pixel numerals, chunky pressable buttons, lifting cards,
+   solid header tabs and a faint CRT scanline.
+   ======================================== */
+
+:root {
+  --lip-dark: rgba(0, 0, 0, 0.35);
+}
+
+/* Faint CRT scanlines over the ambient background */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.018) 0px,
+    rgba(255, 255, 255, 0.018) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+
+/* Pixel face for titles and the numbers people actually read */
+.text-title,
+.stat-value,
+.player-score,
+.payout-amount,
+.multiplier-badge,
+.font-data {
+  /* font vars are set on <body>, so reference them directly (not via :root) */
+  font-family: var(--font-pixel), var(--font-jetbrains), monospace;
+  letter-spacing: 0.01em;
+}
+
+.text-title { font-weight: 700; }
+.stat-value { font-weight: 600; font-size: 1.75rem; }
+.player-score { font-weight: 600; }
+
+/* Chunky buttons: hard bottom lip that presses down, instead of a soft glow */
+.btn {
+  box-shadow: 0 4px 0 var(--lip-dark);
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    transform 80ms ease,
+    box-shadow 80ms ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 0 var(--lip-dark);
+}
+
+.btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--lip-dark);
+}
+
+.btn-primary { box-shadow: 0 4px 0 #8f2a2a; }
+.btn-primary:hover { box-shadow: 0 5px 0 #8f2a2a; }
+.btn-primary:active { box-shadow: 0 1px 0 #8f2a2a; }
+
+.btn-gold { box-shadow: 0 4px 0 #a57f12; }
+.btn-gold:hover { box-shadow: 0 5px 0 #a57f12; }
+.btn-gold:active { box-shadow: 0 1px 0 #a57f12; }
+
+.btn-green { box-shadow: 0 4px 0 #23864a; }
+.btn-green:hover { box-shadow: 0 5px 0 #23864a; }
+.btn-green:active { box-shadow: 0 1px 0 #23864a; }
+
+.btn-call { box-shadow: 0 4px 0 #2f62b8; }
+.btn-double { box-shadow: 0 4px 0 #6a2bb0; }
+
+.btn-ghost,
+.btn-ghost:hover,
+.btn-ghost:active { box-shadow: none; }
+
+/* Retire the pulsing CTA glow; the lip carries the emphasis now */
+.btn-cta-glow { animation: none; }
+
+/* Solid header tab instead of a faint outlined pill */
+.panel-header {
+  background: var(--bg-card-solid);
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.3);
+  color: var(--text-primary);
+}
+
+/* Selected cards lift and tilt, like picking cards in a hand */
+.player-card.red-team,
+.player-card.selected {
+  transform: translateY(-5px) rotate(-1.5deg);
+  box-shadow: 0 6px 0 rgba(143, 42, 42, 0.55), 0 10px 18px rgba(0, 0, 0, 0.35);
+}
+
+.player-card.blue-team {
+  box-shadow: 0 4px 0 rgba(47, 98, 184, 0.45);
+}
+
+.grid-players > .player-card.red-team:nth-child(even) {
+  transform: translateY(-5px) rotate(1.5deg);
+}
+
+/* Multiplier badges read as chunky chips */
+.multiplier-badge {
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.35);
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before { animation: none; }
+  .player-card.red-team,
+  .player-card.selected,
+  .grid-players > .player-card.red-team:nth-child(even) { transform: none; }
+}
