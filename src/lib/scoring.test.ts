@@ -297,6 +297,37 @@ describe('calculateRoundScores', () => {
         });
     });
 
+    describe('multipliers apply to every team composition', () => {
+        it('should apply 2x to 2v4 (red tens 1st & 2nd: +16 / -8)', () => {
+            const roundData: NewRoundData = {
+                multiplier: 2,
+                red_team_player_ids: [playerIds[0], playerIds[1]],
+                finish_order: [playerIds[0], playerIds[1], playerIds[2], playerIds[3], playerIds[4], playerIds[5]],
+                result: 'red_win'
+            };
+
+            const scores = calculateRoundScores(roundData, players);
+
+            expect(scores[playerIds[0]]).toBe(16);
+            expect(scores[playerIds[1]]).toBe(16);
+            [2, 3, 4, 5].forEach(i => expect(scores[playerIds[i]]).toBe(-8));
+        });
+
+        it('should apply 4x to 1v5 (red ten 1st: +100 / -20)', () => {
+            const roundData: NewRoundData = {
+                multiplier: 4,
+                red_team_player_ids: [playerIds[0]],
+                finish_order: [playerIds[0], playerIds[1], playerIds[2], playerIds[3], playerIds[4], playerIds[5]],
+                result: 'red_win'
+            };
+
+            const scores = calculateRoundScores(roundData, players);
+
+            expect(scores[playerIds[0]]).toBe(100);
+            [1, 2, 3, 4, 5].forEach(i => expect(scores[playerIds[i]]).toBe(-20));
+        });
+    });
+
     describe('edge cases', () => {
         it('should return 0 for all when result is an explicit wash, even if finish order is not a wash', () => {
             const roundData: NewRoundData = {

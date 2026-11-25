@@ -20,7 +20,7 @@
  * - Red ten 1st: red ten gains 25, everyone else loses 5
  * - Red ten last (6th): red ten loses 25, everyone else gains 5
  * 
- * Multipliers (only for 3v3):
+ * Multipliers (apply to every team composition: 3v3, 2v4, 1v5):
  * - Normal: 1x
  * - Call: 2x
  * - Double Call: 4x
@@ -241,8 +241,6 @@ export function calculateRoundScores(
         const redTenId = redTeamIds[0];
         const { redTenPoints, regularPoints } = calculate1v5Points(finishOrder, redTenId);
 
-        // Note: Multiplier may or may not apply to 1v5 (not specified)
-        // Applying it based on the pattern
         scores[redTenId] = redTenPoints * multiplier;
         blueTeamIds.forEach(id => {
             scores[id] = regularPoints * multiplier;
