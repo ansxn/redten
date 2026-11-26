@@ -12,6 +12,7 @@ import BottomNav from '@/components/BottomNav';
 import LoadingScreen from '@/components/LoadingScreen';
 import Toast from '@/components/Toast';
 import Modal from '@/components/Modal';
+import PixelIcon, { PixelIconName } from '@/components/PixelIcon';
 
 type SortField = 'lifetime_earnings' | 'win_rate' | 'total_rounds_played' | 'rounds_won' | 'rounds_lost' | 'avg_placement';
 
@@ -96,7 +97,7 @@ export default function GroupDetailPage() {
 
         if (success) {
             setGroup({ ...group, name: editName.trim(), description: editDesc.trim() || null });
-            setMessage({ type: 'success', text: 'Group updated!' });
+            setMessage({ type: 'success', text: 'Group updated' });
             setShowEditModal(false);
         } else {
             setMessage({ type: 'error', text: 'Failed to update (only creator can edit)' });
@@ -119,7 +120,7 @@ export default function GroupDetailPage() {
     const copyInviteCode = () => {
         if (group) {
             navigator.clipboard.writeText(group.invite_code);
-            setMessage({ type: 'success', text: 'Invite code copied!' });
+            setMessage({ type: 'success', text: 'Invite code copied' });
             setTimeout(() => setMessage(null), 2000);
         }
     };
@@ -171,13 +172,13 @@ export default function GroupDetailPage() {
 
     const isCreator = group.created_by === user.id;
 
-    const sortOptions: { field: SortField; label: string; emoji: string }[] = [
-        { field: 'lifetime_earnings', label: 'Earnings', emoji: '💰' },
-        { field: 'win_rate', label: 'Win Rate', emoji: '📊' },
-        { field: 'avg_placement', label: 'Avg Place', emoji: '🎯' },
-        { field: 'total_rounds_played', label: 'Rounds', emoji: '🎮' },
-        { field: 'rounds_won', label: 'Wins', emoji: '🏆' },
-        { field: 'rounds_lost', label: 'Losses', emoji: '❌' },
+    const sortOptions: { field: SortField; label: string; icon: PixelIconName }[] = [
+        { field: 'lifetime_earnings', label: 'Earnings', icon: 'coin' },
+        { field: 'win_rate', label: 'Win Rate', icon: 'chart' },
+        { field: 'avg_placement', label: 'Avg Place', icon: 'bullseye' },
+        { field: 'total_rounds_played', label: 'Rounds', icon: 'gamepad' },
+        { field: 'rounds_won', label: 'Wins', icon: 'trophy' },
+        { field: 'rounds_lost', label: 'Losses', icon: 'close' },
     ];
 
     // Build secondary stat fields (all except the primary sort field)
@@ -196,11 +197,11 @@ export default function GroupDetailPage() {
                 headerRight={
                     <>
                         <button onClick={copyInviteCode} className="btn btn-secondary" style={{ fontSize: '0.75rem' }}>
-                            📋 {group.invite_code}
+                            <PixelIcon name="copy" size={14} /> {group.invite_code}
                         </button>
                         {isCreator && (
                             <button onClick={() => setShowEditModal(true)} className="btn btn-secondary" style={{ fontSize: '0.75rem' }}>
-                                ✏️ Edit
+                                <PixelIcon name="edit" size={14} /> Edit
                             </button>
                         )}
                         <button onClick={handleLeaveGroup} className="btn btn-ghost" style={{ color: 'var(--accent-red)', fontSize: '0.75rem' }}>
@@ -218,21 +219,21 @@ export default function GroupDetailPage() {
                 {/* Sort Buttons */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-sm)', marginBottom: 'var(--space-lg)', alignItems: 'center' }}>
                     <span className="text-dim" style={{ fontSize: '0.8rem', fontWeight: 600 }}>Sort:</span>
-                    {sortOptions.map(({ field, label, emoji }) => (
+                    {sortOptions.map(({ field, label, icon }) => (
                         <button
                             key={field}
                             onClick={() => handleSort(field)}
                             className={`btn ${sortBy === field ? 'btn-primary' : 'btn-secondary'}`}
-                            style={{ fontSize: '0.65rem', padding: '0.35rem 0.5rem' }}
+                            style={{ fontSize: '0.6875rem', padding: '0.35rem 0.5rem' }}
                         >
-                            {emoji} {label} {sortBy === field && (sortAsc ? '↑' : '↓')}
+                            <PixelIcon name={icon} size={12} /> {label} {sortBy === field && (sortAsc ? '↑' : '↓')}
                         </button>
                     ))}
                 </div>
 
                 {/* Leaderboard */}
                 <section className="panel animate-slide-up">
-                    <div className="panel-header">🏆 Leaderboard</div>
+                    <div className="panel-header" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}><PixelIcon name="trophy" size={16} /> Leaderboard</div>
 
                     {sortedLeaderboard.length === 0 ? (
                         <p className="text-dim">No members yet</p>
@@ -298,7 +299,7 @@ export default function GroupDetailPage() {
                                                     }}
                                                 >
                                                     {member.username}
-                                                    {isMe && <span className="text-accent-gold" style={{ fontSize: '0.7rem', marginLeft: '4px' }}>(You)</span>}
+                                                    {isMe && <span className="text-accent-gold" style={{ fontSize: '0.75rem', marginLeft: '4px' }}>(You)</span>}
                                                 </span>
                                             </Link>
 
@@ -310,7 +311,7 @@ export default function GroupDetailPage() {
                                                 >
                                                     {primaryStat.value}
                                                 </div>
-                                                <div className="text-dim" style={{ fontSize: '0.55rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                <div className="text-dim" style={{ fontSize: '0.6875rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                                     {getSortLabel(sortBy)}
                                                 </div>
                                             </div>
@@ -333,7 +334,7 @@ export default function GroupDetailPage() {
                                                         <div className="font-bold font-data" style={{ color: stat.color, fontSize: '0.85rem' }}>
                                                             {stat.value}
                                                         </div>
-                                                        <div className="text-dim" style={{ fontSize: '0.55rem', textTransform: 'uppercase' }}>
+                                                        <div className="text-dim" style={{ fontSize: '0.6875rem', textTransform: 'uppercase' }}>
                                                             {getSortLabel(field)}
                                                         </div>
                                                     </div>

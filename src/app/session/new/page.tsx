@@ -422,7 +422,7 @@ export default function NewSession() {
 
                 {/* Start Button */}
                 <button
-                    className={`btn ${playerCount === 6 ? 'btn-primary btn-cta-glow' : 'btn-secondary'} w-full text-xl py-4`}
+                    className={`btn ${playerCount === 6 ? 'btn-primary' : 'btn-secondary'} w-full text-xl py-4`}
                     onClick={startSession}
                     disabled={playerCount !== 6 || isCreating}
                 >

@@ -53,7 +53,7 @@ export default function Profile() {
 
         if (result.success && result.url) {
             setAvatarUrl(result.url + '?t=' + Date.now());
-            setMessage({ type: 'success', text: 'Profile picture updated!' });
+            setMessage({ type: 'success', text: 'Profile picture updated' });
         } else {
             setMessage({ type: 'error', text: result.error || 'Upload failed' });
         }
@@ -98,7 +98,7 @@ export default function Profile() {
                             right: 0,
                             background: 'rgba(0,0,0,0.6)',
                             color: 'white',
-                            fontSize: '0.6rem',
+                            fontSize: '0.6875rem',
                             fontWeight: 700,
                             padding: '3px',
                             textAlign: 'center',

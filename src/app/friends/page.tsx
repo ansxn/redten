@@ -11,6 +11,7 @@ import BottomNav from '@/components/BottomNav';
 import LoadingScreen from '@/components/LoadingScreen';
 import Toast from '@/components/Toast';
 import EmptyState from '@/components/EmptyState';
+import PixelIcon from '@/components/PixelIcon';
 
 export default function FriendsPage() {
     const { user, isLoading } = useApp();
@@ -63,10 +64,10 @@ export default function FriendsPage() {
                 created_at: new Date().toISOString()
             }]);
             setSearchResults(searchResults.filter(r => r.id !== friendProfile.id));
-            setMessage({ type: 'success', text: `Added ${friendProfile.username} as a friend!` });
+            setMessage({ type: 'success', text: `Added ${friendProfile.username} as a friend` });
             setTimeout(() => setMessage(null), 3000);
         } else {
-            setMessage({ type: 'error', text: 'Failed to add friend. Please try again.' });
+            setMessage({ type: 'error', text: 'Couldn’t add friend. Try again' });
         }
     };
 
@@ -78,10 +79,10 @@ export default function FriendsPage() {
         const success = await removeFriend(user.id, friendId);
         if (success) {
             setFriends(friends.filter(f => f.id !== friendId));
-            setMessage({ type: 'success', text: `Removed ${username} from friends.` });
+            setMessage({ type: 'success', text: `Removed ${username} from friends` });
             setTimeout(() => setMessage(null), 3000);
         } else {
-            setMessage({ type: 'error', text: 'Failed to remove friend. Please try again.' });
+            setMessage({ type: 'error', text: 'Couldn’t remove friend. Try again' });
         }
     };
 
@@ -171,9 +172,9 @@ export default function FriendsPage() {
                         </div>
                     ) : friends.length === 0 ? (
                         <EmptyState
-                            icon="👥"
+                            icon={<PixelIcon name="userPlus" size={40} />}
                             title="No friends yet"
-                            description="Search for users above to add them!"
+                            description="Search a username above to add someone from your table"
                         />
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>

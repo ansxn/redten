@@ -45,7 +45,7 @@ export default function Home() {
                 if (error) {
                     setError(error);
                 } else {
-                    setSuccess('Account created! Check your email to confirm, then sign in.');
+                    setSuccess('Account created. Confirm your email, then sign in.');
                     setMode('signin');
                 }
             } else if (mode === 'signin') {
@@ -68,7 +68,7 @@ export default function Home() {
                 if (error) {
                     setError(error);
                 } else {
-                    setSuccess('Password reset email sent! Check your inbox.');
+                    setSuccess('Reset link sent. Check your inbox.');
                 }
             }
         } catch {
@@ -142,7 +142,7 @@ export default function Home() {
                                 fontSize: '0.8rem',
                                 textTransform: 'uppercase',
                                 letterSpacing: '0.04em',
-                                transition: 'all 150ms ease',
+                                transition: 'background-color 150ms ease, color 150ms ease',
                                 background: mode === m ? 'var(--bg-card-solid)' : 'transparent',
                                 color: mode === m ? 'var(--text-primary)' : 'var(--text-muted)',
                                 boxShadow: mode === m ? 'var(--shadow-sm)' : 'none',

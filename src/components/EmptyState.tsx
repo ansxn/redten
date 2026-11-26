@@ -1,14 +1,16 @@
 'use client';
 
+import PixelIcon from '@/components/PixelIcon';
+
 interface EmptyStateProps {
-    icon?: string;
+    icon?: React.ReactNode;
     title: string;
     description?: string;
     action?: React.ReactNode;
 }
 
 export default function EmptyState({
-    icon = '🃏',
+    icon = <PixelIcon name="cards" size={40} />,
     title,
     description,
     action,
@@ -18,7 +20,7 @@ export default function EmptyState({
             className="text-center animate-fade-in"
             style={{ padding: 'var(--space-3xl) var(--space-lg)' }}
         >
-            <div style={{ fontSize: '3rem', marginBottom: 'var(--space-lg)', opacity: 0.7 }}>
+            <div style={{ display: 'flex', justifyContent: 'center', color: 'var(--text-muted)', marginBottom: 'var(--space-lg)' }}>
                 {icon}
             </div>
             <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: 'var(--space-sm)' }}>

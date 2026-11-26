@@ -10,6 +10,7 @@ import * as db from '@/lib/database';
 import Link from 'next/link';
 import Avatar from '@/components/Avatar';
 import LoadingScreen from '@/components/LoadingScreen';
+import PixelIcon from '@/components/PixelIcon';
 
 type GamePhase = 'lobby' | 'teams' | 'finish_order' | 'results' | 'payout';
 
@@ -335,7 +336,7 @@ export default function SessionPage() {
 
                                 <button
                                     onClick={startNewRound}
-                                    className="btn btn-primary btn-cta-glow w-full text-xl py-4"
+                                    className="btn btn-primary w-full text-xl py-4"
                                 >
                                     Start Round {session.rounds.length + 1}
                                 </button>
@@ -364,7 +365,7 @@ export default function SessionPage() {
 
                                 <div style={{ marginBottom: 'var(--space-xl)' }}>
                                     <h3 className="font-bold" style={{ color: 'var(--accent-red)', marginBottom: 'var(--space-md)', fontSize: '0.9rem' }}>
-                                        🔴 Tap players holding Red 10s
+                                        Tap players holding Red 10s
                                     </h3>
                                     <div className="grid-players">
                                         {session.players.map(player => (
@@ -382,7 +383,7 @@ export default function SessionPage() {
                                                                 : player.avatar_color
                                                         }}
                                                     >
-                                                        {selectedRedPlayers.includes(player.id) ? '🔴' : player.username.charAt(0)}
+                                                        {selectedRedPlayers.includes(player.id) ? <span className="suit" aria-label="Red team">♥</span> : player.username.charAt(0)}
                                                     </div>
                                                     <span className="font-bold" style={{ fontSize: '0.85rem' }}>{player.username}</span>
                                                 </div>
@@ -505,7 +506,7 @@ export default function SessionPage() {
                                                                     background: isRed ? 'var(--accent-red)' : 'var(--accent-blue)',
                                                                 }}
                                                             >
-                                                                {isRed ? '🔴' : '🔵'}
+                                                                <span className="suit" aria-label={isRed ? 'Red team' : 'Blue team'}>{isRed ? '♥' : '♠'}</span>
                                                             </div>
                                                             <span className="font-bold" style={{ fontSize: '0.85rem' }}>{player.username}</span>
                                                         </div>
@@ -535,7 +536,7 @@ export default function SessionPage() {
                                             marginBottom: 'var(--space-xs)',
                                             color: winner === 'wash' ? 'var(--accent-gold)' : winner === 'red_win' ? 'var(--accent-red)' : 'var(--accent-blue)',
                                         }}>
-                                            {winner === 'wash' ? '🟡 Wash — no points' : winner === 'red_win' ? '🔴 Red Wins!' : '🔵 Blue Wins!'}
+                                            {winner === 'wash' ? <><span className="suit suit-wash">–</span> Wash, no points</> : winner === 'red_win' ? <><span className="suit suit-red">♥</span> Red wins</> : <><span className="suit suit-blue">♠</span> Blue wins</>}
                                         </div>
                                         <div className="font-bold font-data text-accent-gold" style={{ fontSize: '1.5rem' }}>
                                             {pointsPreview * multiplier} points × ${session.point_value}
@@ -548,7 +549,7 @@ export default function SessionPage() {
                                         ← Back
                                     </button>
                                     <button onClick={handleWash} disabled={isSubmitting} className="btn btn-gold">
-                                        🟡 Wash
+                                        Wash
                                     </button>
                                     <button
                                         onClick={completeRound}
@@ -564,7 +565,7 @@ export default function SessionPage() {
                         {/* Results Phase */}
                         {phase === 'results' && (
                             <div className="panel animate-slide-up">
-                                <div className="panel-header">Round Complete!</div>
+                                <div className="panel-header">Round {session.rounds.length} Complete</div>
 
                                 <div className="grid-players" style={{ marginBottom: 'var(--space-xl)' }}>
                                     {session.players.map(player => {
@@ -603,7 +604,7 @@ export default function SessionPage() {
                         {/* Payout Phase */}
                         {(phase === 'payout' || session.status === 'completed') && (
                             <div className="panel animate-slide-up">
-                                <div className="panel-header">💰 Final Payout</div>
+                                <div className="panel-header" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}><PixelIcon name="coin" size={16} /> Final Payout</div>
 
                                 {/* Standings */}
                                 <div style={{ marginBottom: 'var(--space-xl)' }}>
@@ -647,7 +648,7 @@ export default function SessionPage() {
 
                                 {payoutTransactions.length === 0 && (
                                     <div className="text-center text-dim" style={{ padding: 'var(--space-xl)' }}>
-                                        Everyone broke even! No payments needed.
+                                        Everyone broke even. Nothing to pay
                                     </div>
                                 )}
 
@@ -679,7 +680,7 @@ export default function SessionPage() {
                                                     <span
                                                         style={{
                                                             marginLeft: 'var(--space-sm)',
-                                                            fontSize: '0.65rem',
+                                                            fontSize: '0.6875rem',
                                                             padding: '2px 6px',
                                                             borderRadius: 'var(--radius-sm)',
                                                             background: round.multiplier === 2 ? 'var(--accent-blue)' : 'var(--accent-purple)',
@@ -693,7 +694,7 @@ export default function SessionPage() {
                                             </div>
                                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 'var(--space-xs)' }}>
                                                 <span className="text-dim" style={{ fontSize: '0.7rem' }}>
-                                                    {round.result === 'red_win' ? '🔴 Red' : round.result === 'blue_win' ? '🔵 Blue' : '🟡 Wash'}
+                                                    {round.result === 'red_win' ? <><span className="suit suit-red">♥</span> Red</> : round.result === 'blue_win' ? <><span className="suit suit-blue">♠</span> Blue</> : <><span className="suit suit-wash">–</span> Wash</>}
                                                 </span>
                                                 {!editingRoundId && session.status === 'active' && (
                                                     <button
@@ -702,7 +703,7 @@ export default function SessionPage() {
                                                             handleEditRound(round);
                                                         }}
                                                         className="btn btn-ghost"
-                                                        style={{ fontSize: '0.6rem', padding: '2px 6px' }}
+                                                        style={{ fontSize: '0.6875rem', padding: '2px 6px' }}
                                                     >
                                                         Edit
                                                     </button>

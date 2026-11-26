@@ -2,19 +2,20 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import PixelIcon, { PixelIconName } from '@/components/PixelIcon';
 
 interface NavItem {
     href: string;
     label: string;
-    icon: string;
+    icon: PixelIconName;
 }
 
 const navItems: NavItem[] = [
-    { href: '/dashboard', label: 'Home', icon: '🏠' },
-    { href: '/session/new', label: 'Play', icon: '🃏' },
-    { href: '/groups', label: 'Groups', icon: '👥' },
-    { href: '/friends', label: 'Friends', icon: '🤝' },
-    { href: '/profile', label: 'Profile', icon: '👤' },
+    { href: '/dashboard', label: 'Home', icon: 'home' },
+    { href: '/session/new', label: 'Play', icon: 'cards' },
+    { href: '/groups', label: 'Groups', icon: 'users' },
+    { href: '/friends', label: 'Friends', icon: 'userPlus' },
+    { href: '/profile', label: 'Profile', icon: 'user' },
 ];
 
 interface BottomNavProps {
@@ -41,7 +42,7 @@ export default function BottomNav({ variant = 'mobile' }: BottomNavProps) {
                             href={item.href}
                             className={`nav-item ${isActive(item.href) ? 'active' : ''}`}
                         >
-                            <span>{item.icon}</span>
+                            <PixelIcon name={item.icon} size={16} />
                             <span>{item.label}</span>
                         </Link>
                     ))}
@@ -57,7 +58,7 @@ export default function BottomNav({ variant = 'mobile' }: BottomNavProps) {
                             href={item.href}
                             className={`nav-item ${isActive(item.href) ? 'active' : ''}`}
                         >
-                            <span className="nav-icon">{item.icon}</span>
+                            <span className="nav-icon"><PixelIcon name={item.icon} size={20} /></span>
                             <span>{item.label}</span>
                         </Link>
                     ))}

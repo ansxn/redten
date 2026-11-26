@@ -8,6 +8,7 @@ import { formatMoney } from '@/lib/scoring';
 import { getAvatarUrl } from '@/lib/avatar';
 import { getUserProfile, getOrCreateUserStats, getUserSessions } from '@/lib/database';
 import { User, UserStats, Session, getAveragePlacement } from '@/types';
+import LoadingScreen from '@/components/LoadingScreen';
 
 export default function PublicProfile() {
     const { user, isLoading: appLoading } = useApp();
@@ -58,13 +59,7 @@ export default function PublicProfile() {
     }, [profileId]);
 
     if (appLoading || isLoading) {
-        return (
-            <div className="min-h-screen flex-center">
-                <div className="text-2xl text-glow" style={{ color: 'var(--accent-gold)' }}>
-                    Loading...
-                </div>
-            </div>
-        );
+        return <LoadingScreen />;
     }
 
     if (!profile) {
@@ -211,8 +206,8 @@ export default function PublicProfile() {
                                             </span>
                                         </div>
                                         <div className="flex items-center gap-4">
-                                            <span className={`font-bold ${earnings > 0 ? 'text-green-400' :
-                                                earnings < 0 ? 'text-red-400' : ''
+                                            <span className={`font-bold ${earnings > 0 ? 'text-positive' :
+                                                earnings < 0 ? 'text-negative' : ''
                                                 }`}>
                                                 {formatMoney(earnings)}
                                             </span>

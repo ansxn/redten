@@ -11,6 +11,7 @@ import LoadingScreen from '@/components/LoadingScreen';
 import Toast from '@/components/Toast';
 import Modal from '@/components/Modal';
 import EmptyState from '@/components/EmptyState';
+import PixelIcon from '@/components/PixelIcon';
 
 export default function GroupsPage() {
     const { user, isLoading } = useApp();
@@ -59,7 +60,7 @@ export default function GroupsPage() {
 
         if (group) {
             setGroups([...groups, group]);
-            setMessage({ type: 'success', text: `Group "${group.name}" created! Invite code: ${group.invite_code}` });
+            setMessage({ type: 'success', text: `Group "${group.name}" created. Invite code: ${group.invite_code}` });
             setShowCreateModal(false);
             setNewGroupName('');
             setNewGroupDesc('');
@@ -80,7 +81,7 @@ export default function GroupsPage() {
 
         if (result.success && result.group) {
             setGroups([...groups, result.group]);
-            setMessage({ type: 'success', text: `Joined "${result.group.name}"!` });
+            setMessage({ type: 'success', text: `Joined "${result.group.name}"` });
             setShowJoinModal(false);
             setInviteCode('');
         } else {
@@ -133,9 +134,9 @@ export default function GroupsPage() {
                         </div>
                     ) : groups.length === 0 ? (
                         <EmptyState
-                            icon="👥"
+                            icon={<PixelIcon name="users" size={40} />}
                             title="No groups yet"
-                            description="Create one or join with an invite code!"
+                            description="Create one for your table, or join with an invite code"
                         />
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>

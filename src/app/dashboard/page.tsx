@@ -4,6 +4,7 @@ import { useApp } from '@/context/AppContext';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import Link from 'next/link';
+import { formatMoney } from '@/lib/scoring';
 import BottomNav from '@/components/BottomNav';
 import LoadingScreen from '@/components/LoadingScreen';
 import EmptyState from '@/components/EmptyState';
@@ -43,7 +44,7 @@ export default function Dashboard() {
                                 style={{ marginBottom: 'var(--space-sm)' }}
                             />
                             <p className="text-sub text-sm md:text-base">
-                                Welcome back, <strong className="text-accent-gold">{user.username}</strong>
+                                Playing as <strong className="text-accent-gold">{user.username}</strong>
                             </p>
                         </div>
                         <div className="desktop-nav" style={{ alignItems: 'center', gap: 'var(--space-sm)' }}>
@@ -61,7 +62,7 @@ export default function Dashboard() {
                         </h2>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-md">
                             <StatCard
-                                value={`$${(userStats?.lifetime_earnings || 0).toFixed(2)}`}
+                                value={formatMoney(userStats?.lifetime_earnings || 0)}
                                 label="Lifetime Earnings"
                                 color={(userStats?.lifetime_earnings || 0) >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}
                             />
@@ -85,7 +86,7 @@ export default function Dashboard() {
 
                     {/* Quick Actions */}
                     <section className="animate-slide-up" style={{ animationDelay: '0.1s', marginBottom: 'var(--space-2xl)' }}>
-                        <Link href="/session/new" className="btn btn-primary btn-cta-glow text-xl py-4 px-8">
+                        <Link href="/session/new" className="btn btn-primary text-xl py-4 px-8">
                             + Start New Session
                         </Link>
                     </section>
@@ -154,9 +155,8 @@ export default function Dashboard() {
                     {/* Empty State */}
                     {sessions.length === 0 && (
                         <EmptyState
-                            icon="🃏"
                             title="No Sessions Yet"
-                            description="Start your first game session to begin tracking scores!"
+                            description="Start a session when the cards come out and every round gets tracked here"
                             action={
                                 <Link href="/session/new" className="btn btn-primary">
                                     Start First Session
